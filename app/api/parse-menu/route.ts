@@ -1,5 +1,7 @@
 import { NextRequest } from 'next/server'
 
+export const maxDuration = 60
+
 export async function POST(req: NextRequest) {
   const geminiKey = process.env.GEMINI_API_KEY
   const anthropicKey = process.env.ANTHROPIC_API_KEY

@@ -186,11 +186,13 @@ export default function AdminPage() {
       const timer = setTimeout(() => controller.abort(), 30000)
       const res = await fetch('/api/parse-menu', { method: 'POST', body: form, signal: controller.signal })
       clearTimeout(timer)
-      const data = await res.json()
+      const text = await res.text()
+      let data: any
+      try { data = JSON.parse(text) } catch { throw new Error('伺服器回應異常：' + text.slice(0, 100)) }
       if (data.error) return flash('辨識失敗：' + data.error)
       setParsedMenu(data)
     } catch (e: any) {
-      flash(e.name === 'AbortError' ? '辨識逾時，請重試' : '網路錯誤，請重試')
+      flash(e.name === 'AbortError' ? '辨識逾時，請重試' : (e.message || '發生錯誤，請重試'))
     } finally {
       setParseLoading(false)
     }
