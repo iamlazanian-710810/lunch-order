@@ -180,15 +180,23 @@ export default function AdminPage() {
     setParsedMenu(null)
     try {
       const compressed = await compressImage(file)
-      const form = new FormData()
-      form.append('image', compressed, 'menu.jpg')
+      const base64 = await new Promise<string>((resolve) => {
+        const reader = new FileReader()
+        reader.onload = () => resolve((reader.result as string).split(',')[1])
+        reader.readAsDataURL(compressed)
+      })
       const controller = new AbortController()
-      const timer = setTimeout(() => controller.abort(), 30000)
-      const res = await fetch('/api/parse-menu', { method: 'POST', body: form, signal: controller.signal })
+      const timer = setTimeout(() => controller.abort(), 55000)
+      const res = await fetch('/api/parse-menu', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image: base64, mimeType: 'image/jpeg' }),
+        signal: controller.signal,
+      })
       clearTimeout(timer)
       const text = await res.text()
       let data: any
-      try { data = JSON.parse(text) } catch { throw new Error('伺服器回應異常：' + text.slice(0, 100)) }
+      try { data = JSON.parse(text) } catch { throw new Error('伺服器回應異常：' + text.slice(0, 150)) }
       if (data.error) return flash('辨識失敗：' + data.error)
       setParsedMenu(data)
     } catch (e: any) {
