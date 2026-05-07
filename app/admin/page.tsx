@@ -1,7 +1,10 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { supabase, type Restaurant, type MenuItem, type Employee } from '@/lib/supabase'
+
+type ParsedMenuItem = { name: string; price: number }
+type ParsedMenu = { restaurant_name: string; items: ParsedMenuItem[] }
 
 const today = new Date().toISOString().slice(0, 10)
 
@@ -28,6 +31,13 @@ export default function AdminPage() {
   const [newEmpName, setNewEmpName] = useState('')
 
   const [msg, setMsg] = useState('')
+
+  // Photo upload states
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+  const [parsedMenu, setParsedMenu] = useState<ParsedMenu | null>(null)
+  const [parseLoading, setParseLoading] = useState(false)
+  const [saveLoading, setSaveLoading] = useState(false)
 
   const load = useCallback(async () => {
     const [{ data: rests }, { data: emps }, { data: sched }, { data: orders }] = await Promise.all([
@@ -141,6 +151,50 @@ export default function AdminPage() {
     flash('已複製到剪貼簿！')
   }
 
+  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setPreviewUrl(URL.createObjectURL(file))
+    setParsedMenu(null)
+  }
+
+  const parseMenu = async () => {
+    const file = fileInputRef.current?.files?.[0]
+    if (!file) return
+    setParseLoading(true)
+    setParsedMenu(null)
+    const form = new FormData()
+    form.append('image', file)
+    const res = await fetch('/api/parse-menu', { method: 'POST', body: form })
+    const data = await res.json()
+    setParseLoading(false)
+    if (data.error) return flash('辨識失敗：' + data.error)
+    setParsedMenu(data)
+  }
+
+  const saveMenuFromPhoto = async () => {
+    if (!parsedMenu) return
+    setSaveLoading(true)
+    const restName = parsedMenu.restaurant_name || '新餐廳'
+    const { data: rest, error: restErr } = await supabase
+      .from('restaurants')
+      .insert({ name: restName, sort_order: restaurants.length })
+      .select()
+      .single()
+    if (restErr) { setSaveLoading(false); return flash('建立餐廳失敗：' + restErr.message) }
+    if (parsedMenu.items.length > 0) {
+      await supabase.from('menu_items').insert(
+        parsedMenu.items.map(item => ({ restaurant_id: rest.id, name: item.name, price: item.price }))
+      )
+    }
+    setSaveLoading(false)
+    setPreviewUrl(null)
+    setParsedMenu(null)
+    if (fileInputRef.current) fileInputRef.current.value = ''
+    flash(`已建立「${restName}」及 ${parsedMenu.items.length} 項菜單`)
+    load()
+  }
+
   const tabClass = (t: string) =>
     `px-4 py-2 rounded-lg font-medium text-sm transition-colors ${tab === t ? 'bg-orange-500 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`
 
@@ -228,6 +282,96 @@ export default function AdminPage() {
 
       {tab === 'restaurants' && (
         <div className="space-y-4">
+          {/* Photo upload card */}
+          <div className="bg-gradient-to-br from-orange-50 to-amber-50 rounded-xl border border-orange-200 shadow-sm p-5">
+            <h2 className="font-semibold text-gray-700 mb-1">📷 拍照上傳菜單</h2>
+            <p className="text-xs text-gray-500 mb-3">拍菜單照片，AI 自動辨識品項與價格，一鍵建立餐廳</p>
+            <div className="flex gap-3 items-start flex-wrap">
+              <div className="flex-1 min-w-48">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  onChange={handleImageSelect}
+                  className="block w-full text-sm text-gray-600 file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-orange-500 file:text-white file:font-medium hover:file:bg-orange-600 cursor-pointer"
+                />
+              </div>
+              {previewUrl && !parsedMenu && (
+                <button
+                  onClick={parseMenu}
+                  disabled={parseLoading}
+                  className="bg-orange-500 hover:bg-orange-600 disabled:opacity-60 text-white px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap"
+                >
+                  {parseLoading ? '辨識中…' : 'AI 辨識菜單'}
+                </button>
+              )}
+            </div>
+
+            {previewUrl && (
+              <div className="mt-3">
+                <img src={previewUrl} alt="菜單預覽" className="max-h-48 rounded-lg border object-contain" />
+              </div>
+            )}
+
+            {parsedMenu && (
+              <div className="mt-4 bg-white rounded-lg border p-4 space-y-3">
+                <div>
+                  <label className="text-xs text-gray-500 block mb-1">餐廳名稱</label>
+                  <input
+                    value={parsedMenu.restaurant_name}
+                    onChange={e => setParsedMenu({ ...parsedMenu, restaurant_name: e.target.value })}
+                    className="border rounded-lg px-3 py-1.5 text-sm text-gray-800 w-full focus:outline-none focus:ring-2 focus:ring-orange-400"
+                    placeholder="輸入餐廳名稱"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-500 block mb-1">辨識到的品項（可修改）</label>
+                  <div className="space-y-1.5 max-h-48 overflow-y-auto">
+                    {parsedMenu.items.map((item, i) => (
+                      <div key={i} className="flex gap-2 items-center">
+                        <input
+                          value={item.name}
+                          onChange={e => {
+                            const items = [...parsedMenu.items]
+                            items[i] = { ...items[i], name: e.target.value }
+                            setParsedMenu({ ...parsedMenu, items })
+                          }}
+                          className="flex-1 border rounded-lg px-3 py-1 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-orange-400"
+                        />
+                        <input
+                          type="number"
+                          value={item.price}
+                          onChange={e => {
+                            const items = [...parsedMenu.items]
+                            items[i] = { ...items[i], price: Number(e.target.value) }
+                            setParsedMenu({ ...parsedMenu, items })
+                          }}
+                          className="w-20 border rounded-lg px-3 py-1 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-orange-400"
+                        />
+                        <button
+                          onClick={() => setParsedMenu({ ...parsedMenu, items: parsedMenu.items.filter((_, j) => j !== i) })}
+                          className="text-red-300 hover:text-red-500 text-lg leading-none"
+                        >×</button>
+                      </div>
+                    ))}
+                  </div>
+                  <button
+                    onClick={() => setParsedMenu({ ...parsedMenu, items: [...parsedMenu.items, { name: '', price: 0 }] })}
+                    className="mt-2 text-xs text-orange-500 hover:text-orange-700"
+                  >+ 新增品項</button>
+                </div>
+                <button
+                  onClick={saveMenuFromPhoto}
+                  disabled={saveLoading}
+                  className="w-full bg-green-500 hover:bg-green-600 disabled:opacity-60 text-white py-2 rounded-lg text-sm font-medium"
+                >
+                  {saveLoading ? '儲存中…' : `✓ 建立餐廳與 ${parsedMenu.items.length} 項菜單`}
+                </button>
+              </div>
+            )}
+          </div>
+
           <div className="bg-white rounded-xl border shadow-sm p-5">
             <h2 className="font-semibold text-gray-700 mb-3">新增餐廳</h2>
             <div className="grid sm:grid-cols-3 gap-3 mb-3">
