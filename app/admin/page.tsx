@@ -309,10 +309,10 @@ export default function AdminPage() {
               </table>
             ) : (() => {
               // 依品項分組
-              const itemMap: Record<string, { count: number; total: number; persons: string[]; note: string }> = {}
+              const itemMap: Record<string, { itemName: string; count: number; total: number; persons: string[]; note: string }> = {}
               for (const o of todayOrders as any[]) {
-                const key = o.item_name ?? ''
-                if (!itemMap[key]) itemMap[key] = { count: 0, total: 0, persons: [], note: o.note ?? '' }
+                const key = `${o.item_name ?? ''}__${o.note ?? ''}`
+                if (!itemMap[key]) itemMap[key] = { itemName: o.item_name ?? '', count: 0, total: 0, persons: [], note: o.note ?? '' }
                 itemMap[key].count += o.qty ?? 1
                 itemMap[key].total += o.subtotal
                 itemMap[key].persons.push(o.employees?.name ?? '未知')
@@ -329,10 +329,10 @@ export default function AdminPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {items.map(([name, info]) => (
-                      <tr key={name} className="border-b last:border-0">
+                    {items.map(([key, info]) => (
+                      <tr key={key} className="border-b last:border-0">
                         <td className="py-1.5 text-gray-700">
-                          <div>{name}</div>
+                          <div>{info.itemName}</div>
                           {info.note && <div className="text-xs text-blue-500">備註：{info.note}</div>}
                         </td>
                         <td className="py-1.5 text-gray-500 text-xs">{info.persons.join('、')}</td>
