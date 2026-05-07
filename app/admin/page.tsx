@@ -158,18 +158,42 @@ export default function AdminPage() {
     setParsedMenu(null)
   }
 
+  const compressImage = (file: File): Promise<Blob> =>
+    new Promise((resolve) => {
+      const img = new Image()
+      img.onload = () => {
+        const MAX = 1200
+        const scale = Math.min(1, MAX / Math.max(img.width, img.height))
+        const canvas = document.createElement('canvas')
+        canvas.width = img.width * scale
+        canvas.height = img.height * scale
+        canvas.getContext('2d')!.drawImage(img, 0, 0, canvas.width, canvas.height)
+        canvas.toBlob(b => resolve(b!), 'image/jpeg', 0.85)
+      }
+      img.src = URL.createObjectURL(file)
+    })
+
   const parseMenu = async () => {
     const file = fileInputRef.current?.files?.[0]
     if (!file) return
     setParseLoading(true)
     setParsedMenu(null)
-    const form = new FormData()
-    form.append('image', file)
-    const res = await fetch('/api/parse-menu', { method: 'POST', body: form })
-    const data = await res.json()
-    setParseLoading(false)
-    if (data.error) return flash('辨識失敗：' + data.error)
-    setParsedMenu(data)
+    try {
+      const compressed = await compressImage(file)
+      const form = new FormData()
+      form.append('image', compressed, 'menu.jpg')
+      const controller = new AbortController()
+      const timer = setTimeout(() => controller.abort(), 30000)
+      const res = await fetch('/api/parse-menu', { method: 'POST', body: form, signal: controller.signal })
+      clearTimeout(timer)
+      const data = await res.json()
+      if (data.error) return flash('辨識失敗：' + data.error)
+      setParsedMenu(data)
+    } catch (e: any) {
+      flash(e.name === 'AbortError' ? '辨識逾時，請重試' : '網路錯誤，請重試')
+    } finally {
+      setParseLoading(false)
+    }
   }
 
   const saveMenuFromPhoto = async () => {
