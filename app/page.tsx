@@ -17,6 +17,7 @@ export default function HomePage() {
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState('')
   const [scheduleId, setScheduleId] = useState<string | null>(null)
+  const [lightbox, setLightbox] = useState(false)
 
   const loadBase = useCallback(async () => {
     const [{ data: emps }, { data: sched }] = await Promise.all([
@@ -122,8 +123,16 @@ export default function HomePage() {
           {/* 菜單圖片 */}
           {menuImage ? (
             <div className="bg-white rounded-xl shadow-sm border p-3">
-              <p className="text-sm font-medium text-gray-600 mb-2">今日菜單</p>
-              <img src={menuImage} alt="今日菜單" className="w-full rounded-lg object-contain max-h-80" />
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-sm font-medium text-gray-600">今日菜單</p>
+                <span className="text-xs text-gray-400">點圖放大</span>
+              </div>
+              <img
+                src={menuImage}
+                alt="今日菜單"
+                className="w-full rounded-lg object-contain max-h-80 cursor-zoom-in"
+                onClick={() => setLightbox(true)}
+              />
             </div>
           ) : (
             <div className="bg-white rounded-xl shadow-sm border p-5 text-center text-gray-400 italic text-sm">
@@ -242,6 +251,24 @@ export default function HomePage() {
           )}
         </div>
       </div>
+
+      {/* Lightbox */}
+      {lightbox && menuImage && (
+        <div
+          className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4"
+          onClick={() => setLightbox(false)}
+        >
+          <img
+            src={menuImage}
+            alt="今日菜單"
+            className="max-w-full max-h-full rounded-lg object-contain"
+          />
+          <button
+            className="absolute top-4 right-4 text-white text-3xl leading-none hover:text-gray-300"
+            onClick={() => setLightbox(false)}
+          >×</button>
+        </div>
+      )}
     </div>
   )
 }
