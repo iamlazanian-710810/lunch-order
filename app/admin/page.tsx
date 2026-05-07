@@ -10,7 +10,8 @@ export default function AdminPage() {
   const [restaurants, setRestaurants] = useState<RestaurantWithMenu[]>([])
   const [employees, setEmployees] = useState<Employee[]>([])
   const [todayOrders, setTodayOrders] = useState<any[]>([])
-  const [tab, setTab] = useState<'today' | 'restaurants' | 'employees'>('today')
+  const [tab, setTab] = useState<'today' | 'monthly' | 'restaurants' | 'employees'>('today')
+  const [monthlyOrders, setMonthlyOrders] = useState<any[]>([])
   const [msg, setMsg] = useState('')
 
   // 今日設定
@@ -42,7 +43,20 @@ export default function AdminPage() {
     setTodayOrders(orders ?? [])
   }, [])
 
+  const loadMonthly = useCallback(async () => {
+    const now = new Date()
+    const from = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`
+    const to = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-31`
+    const { data } = await supabase
+      .from('orders')
+      .select('date, item_name, note, subtotal, employees(name)')
+      .gte('date', from).lte('date', to)
+      .order('date', { ascending: false })
+    setMonthlyOrders(data ?? [])
+  }, [])
+
   useEffect(() => { load() }, [load])
+  useEffect(() => { if (tab === 'monthly') loadMonthly() }, [tab, loadMonthly])
 
   const flash = (m: string) => { setMsg(m); setTimeout(() => setMsg(''), 3000) }
 
@@ -151,8 +165,9 @@ export default function AdminPage() {
         {msg && <span className="text-sm text-green-600 bg-green-50 px-3 py-1 rounded-full">{msg}</span>}
       </div>
 
-      <div className="flex gap-2">
+      <div className="flex gap-2 flex-wrap">
         <button className={tabClass('today')} onClick={() => setTab('today')}>今日設定</button>
+        <button className={tabClass('monthly')} onClick={() => setTab('monthly')}>本月記錄</button>
         <button className={tabClass('restaurants')} onClick={() => setTab('restaurants')}>餐廳管理</button>
         <button className={tabClass('employees')} onClick={() => setTab('employees')}>員工管理</button>
       </div>
@@ -228,6 +243,63 @@ export default function AdminPage() {
           </div>
         </div>
       )}
+
+      {tab === 'monthly' && (() => {
+        // group by date
+        const byDate: Record<string, any[]> = {}
+        for (const o of monthlyOrders as any[]) {
+          if (!byDate[o.date]) byDate[o.date] = []
+          byDate[o.date].push(o)
+        }
+        const dates = Object.keys(byDate).sort((a, b) => b.localeCompare(a))
+        const now = new Date()
+        return (
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <h2 className="font-semibold text-gray-700">
+                {now.getFullYear()} 年 {now.getMonth() + 1} 月 訂餐明細
+              </h2>
+              <span className="text-sm text-gray-400">共 {monthlyOrders.length} 筆</span>
+            </div>
+            {dates.length === 0 && (
+              <div className="bg-white rounded-xl border shadow-sm p-8 text-center text-gray-400 italic">本月尚無訂餐記錄</div>
+            )}
+            {dates.map(date => {
+              const dayOrders = byDate[date]
+              const dayTotal = dayOrders.reduce((s: number, o: any) => s + o.subtotal, 0)
+              const dateLabel = new Date(date + 'T12:00:00').toLocaleDateString('zh-TW', { month: 'long', day: 'numeric', weekday: 'short' })
+              return (
+                <div key={date} className="bg-white rounded-xl border shadow-sm overflow-hidden">
+                  <div className="flex items-center justify-between px-5 py-3 bg-gray-50 border-b">
+                    <span className="font-semibold text-gray-700">{dateLabel}</span>
+                    <span className="text-orange-500 font-semibold">${dayTotal}</span>
+                  </div>
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="text-gray-400 border-b">
+                        <th className="text-left px-5 py-2">員工</th>
+                        <th className="text-left px-2 py-2">餐點</th>
+                        <th className="text-left px-2 py-2">備註</th>
+                        <th className="text-right px-5 py-2">金額</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {dayOrders.map((o: any, i: number) => (
+                        <tr key={i} className="border-b last:border-0">
+                          <td className="px-5 py-2 text-gray-700 whitespace-nowrap">{o.employees?.name}</td>
+                          <td className="px-2 py-2 text-gray-700">{o.item_name}</td>
+                          <td className="px-2 py-2 text-blue-500 text-xs">{o.note ?? ''}</td>
+                          <td className="px-5 py-2 text-right text-orange-500">${o.subtotal}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )
+            })}
+          </div>
+        )
+      })()}
 
       {tab === 'restaurants' && (
         <div className="space-y-4">

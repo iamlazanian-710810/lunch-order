@@ -210,9 +210,14 @@ export default function HomePage() {
                     <span className="text-orange-500">${p.total}</span>
                   </div>
                   {p.items.map((item, idx) => (
-                    <div key={idx} className="text-xs text-gray-500 flex justify-between ml-2 mt-0.5">
-                      <span>{item.name}{item.note ? <span className="text-gray-400">（{item.note}）</span> : ''}</span>
-                      <span>${item.price}</span>
+                    <div key={idx} className="ml-2 mt-1">
+                      <div className="text-xs text-gray-600 flex justify-between">
+                        <span>{item.name}</span>
+                        <span className="text-orange-400">${item.price}</span>
+                      </div>
+                      {item.note && (
+                        <div className="text-xs text-blue-500 mt-0.5">備註：{item.note}</div>
+                      )}
                     </div>
                   ))}
                 </div>
