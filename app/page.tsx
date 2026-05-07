@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { supabase, type Employee } from '@/lib/supabase'
 
 type OrderRow = { item_name: string; price: string; note: string }
-type PeerOrder = { employee_name: string; items: { name: string; price: number; note: string }[]; total: number }
+type PeerOrder = { employee_name: string; items: { id: string; name: string; price: number; note: string }[]; total: number }
 
 const today = new Date().toISOString().slice(0, 10)
 
@@ -31,7 +31,7 @@ export default function HomePage() {
   const loadOrders = useCallback(async () => {
     const { data } = await supabase
       .from('orders')
-      .select('item_name, subtotal, note, employees(name)')
+      .select('id, item_name, subtotal, note, employee_id, employees(name)')
       .eq('date', today)
     if (!data) return
 
@@ -39,7 +39,7 @@ export default function HomePage() {
     for (const o of data as any[]) {
       const empName = o.employees?.name ?? '未知'
       if (!map[empName]) map[empName] = { employee_name: empName, items: [], total: 0 }
-      map[empName].items.push({ name: o.item_name ?? '', price: o.subtotal, note: o.note ?? '' })
+      map[empName].items.push({ id: o.id, name: o.item_name ?? '', price: o.subtotal, note: o.note ?? '' })
       map[empName].total += o.subtotal
     }
     setPeerOrders(Object.values(map).sort((a, b) => a.employee_name.localeCompare(b.employee_name, 'zh-TW')))
@@ -98,6 +98,12 @@ export default function HomePage() {
     if (error) return setMessage('儲存失敗：' + error.message)
     setMessage('已送出！')
     loadOrders()
+  }
+
+  const deleteMyOrder = async (orderId: string) => {
+    await supabase.from('orders').delete().eq('id', orderId)
+    loadOrders()
+    loadMyOrders(selectedEmployee)
   }
 
   const dateLabel = new Date(today + 'T12:00:00').toLocaleDateString('zh-TW', {
@@ -211,9 +217,15 @@ export default function HomePage() {
                   </div>
                   {p.items.map((item, idx) => (
                     <div key={idx} className="ml-2 mt-1">
-                      <div className="text-xs text-gray-600 flex justify-between">
-                        <span>{item.name}</span>
-                        <span className="text-orange-400">${item.price}</span>
+                      <div className="text-xs text-gray-600 flex justify-between items-start gap-1">
+                        <span className="flex-1">{item.name}</span>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-orange-400">${item.price}</span>
+                          {selectedEmployee && p.employee_name === employees.find(e => e.id === selectedEmployee)?.name && (
+                            <button onClick={() => deleteMyOrder(item.id)}
+                              className="text-red-300 hover:text-red-500 text-base leading-none">×</button>
+                          )}
+                        </div>
                       </div>
                       {item.note && (
                         <div className="text-xs text-blue-500 mt-0.5">備註：{item.note}</div>
