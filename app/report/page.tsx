@@ -25,7 +25,7 @@ export default function ReportPage() {
 
     const { data } = await supabase
       .from('orders')
-      .select('date, qty, subtotal, employees(name), menu_items(name)')
+      .select('date, qty, subtotal, item_name, note, employees(name)')
       .gte('date', from)
       .lte('date', to)
       .order('date')
@@ -43,7 +43,8 @@ export default function ReportPage() {
         day = { date: o.date, items: '', subtotal: 0 }
         empMap[name].days.push(day)
       }
-      day.items += (day.items ? '、' : '') + `${o.menu_items?.name}×${o.qty}`
+      const label = o.item_name ?? o.menu_items?.name ?? '未知'
+      day.items += (day.items ? '、' : '') + `${label}${o.note ? `（${o.note}）` : ''}×${o.qty}`
       day.subtotal += o.subtotal
       empMap[name].total += o.subtotal
     }

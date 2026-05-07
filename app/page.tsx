@@ -1,47 +1,37 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import { supabase, type Employee, type MenuItem, type Restaurant } from '@/lib/supabase'
+import { supabase, type Employee } from '@/lib/supabase'
 
-type OrderMap = Record<string, number>
-
-type PeerOrder = {
-  employee_name: string
-  items: { name: string; qty: number; subtotal: number }[]
-  total: number
-}
+type OrderRow = { item_name: string; price: string; note: string }
+type PeerOrder = { employee_name: string; items: { name: string; price: number; note: string }[]; total: number }
 
 const today = new Date().toISOString().slice(0, 10)
 
 export default function HomePage() {
   const [employees, setEmployees] = useState<Employee[]>([])
-  const [restaurant, setRestaurant] = useState<Restaurant | null>(null)
-  const [menuItems, setMenuItems] = useState<MenuItem[]>([])
   const [selectedEmployee, setSelectedEmployee] = useState('')
-  const [orderMap, setOrderMap] = useState<OrderMap>({})
+  const [menuImage, setMenuImage] = useState<string | null>(null)
+  const [rows, setRows] = useState<OrderRow[]>([{ item_name: '', price: '', note: '' }])
   const [peerOrders, setPeerOrders] = useState<PeerOrder[]>([])
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState('')
+  const [scheduleId, setScheduleId] = useState<string | null>(null)
 
   const loadBase = useCallback(async () => {
     const [{ data: emps }, { data: sched }] = await Promise.all([
       supabase.from('employees').select('*').order('name'),
-      supabase.from('daily_schedule').select('*, restaurants(*)').eq('date', today).maybeSingle(),
+      supabase.from('daily_schedule').select('id, menu_image').eq('date', today).maybeSingle(),
     ])
     setEmployees(emps ?? [])
-    if (sched?.restaurants) {
-      const rest = sched.restaurants as unknown as Restaurant
-      setRestaurant(rest)
-      const { data: menu } = await supabase
-        .from('menu_items').select('*').eq('restaurant_id', rest.id).order('price')
-      setMenuItems(menu ?? [])
-    }
+    setMenuImage((sched as any)?.menu_image ?? null)
+    setScheduleId((sched as any)?.id ?? null)
   }, [])
 
   const loadOrders = useCallback(async () => {
     const { data } = await supabase
       .from('orders')
-      .select('menu_item_id, qty, subtotal, employees(name), menu_items(name)')
+      .select('item_name, subtotal, note, employees(name)')
       .eq('date', today)
     if (!data) return
 
@@ -49,51 +39,64 @@ export default function HomePage() {
     for (const o of data as any[]) {
       const empName = o.employees?.name ?? '未知'
       if (!map[empName]) map[empName] = { employee_name: empName, items: [], total: 0 }
-      map[empName].items.push({ name: o.menu_items?.name, qty: o.qty, subtotal: o.subtotal })
+      map[empName].items.push({ name: o.item_name ?? '', price: o.subtotal, note: o.note ?? '' })
       map[empName].total += o.subtotal
     }
     setPeerOrders(Object.values(map).sort((a, b) => a.employee_name.localeCompare(b.employee_name, 'zh-TW')))
+  }, [])
 
-    if (selectedEmployee) {
-      const empName = employees.find(e => e.id === selectedEmployee)?.name
-      const mine = (data as any[]).filter(o => o.employees?.name === empName)
-      const map2: OrderMap = {}
-      mine.forEach((o: any) => { map2[o.menu_item_id] = o.qty })
-      setOrderMap(map2)
+  const loadMyOrders = useCallback(async (empId: string) => {
+    const { data } = await supabase
+      .from('orders')
+      .select('item_name, subtotal, note')
+      .eq('date', today)
+      .eq('employee_id', empId)
+    if (data && data.length > 0) {
+      setRows(data.map((o: any) => ({ item_name: o.item_name ?? '', price: String(o.subtotal), note: o.note ?? '' })))
+    } else {
+      setRows([{ item_name: '', price: '', note: '' }])
     }
-  }, [selectedEmployee, employees])
+  }, [])
 
   useEffect(() => { loadBase() }, [loadBase])
-  useEffect(() => { if (employees.length) loadOrders() }, [loadOrders, employees])
+  useEffect(() => { loadOrders() }, [loadOrders])
 
-  const changeQty = (itemId: string, delta: number) => {
-    setOrderMap(prev => {
-      const next = { ...prev }
-      const val = (next[itemId] ?? 0) + delta
-      if (val <= 0) delete next[itemId]
-      else next[itemId] = val
-      return next
-    })
+  const handleEmployeeChange = (id: string) => {
+    setSelectedEmployee(id)
+    setMessage('')
+    if (id) loadMyOrders(id)
+    else setRows([{ item_name: '', price: '', note: '' }])
   }
 
-  const total = menuItems.reduce((sum, item) => sum + (orderMap[item.id] ?? 0) * item.price, 0)
+  const updateRow = (i: number, field: keyof OrderRow, val: string) => {
+    setRows(prev => prev.map((r, idx) => idx === i ? { ...r, [field]: val } : r))
+  }
+
+  const addRow = () => setRows(prev => [...prev, { item_name: '', price: '', note: '' }])
+  const removeRow = (i: number) => setRows(prev => prev.length === 1 ? prev : prev.filter((_, idx) => idx !== i))
+
+  const total = rows.reduce((s, r) => s + (parseInt(r.price) || 0), 0)
 
   const handleSave = async () => {
     if (!selectedEmployee) return setMessage('請先選擇姓名')
-    if (Object.keys(orderMap).length === 0) return setMessage('請至少選一個品項')
+    const valid = rows.filter(r => r.item_name.trim() && parseInt(r.price) > 0)
+    if (valid.length === 0) return setMessage('請至少填一筆餐點名稱與價格')
     setSaving(true)
     setMessage('')
-
     await supabase.from('orders').delete().eq('date', today).eq('employee_id', selectedEmployee)
-
-    const rows = Object.entries(orderMap).map(([menu_item_id, qty]) => {
-      const item = menuItems.find(m => m.id === menu_item_id)!
-      return { date: today, employee_id: selectedEmployee, menu_item_id, qty, subtotal: item.price * qty }
-    })
-    const { error } = await supabase.from('orders').insert(rows)
+    const insertRows = valid.map(r => ({
+      date: today,
+      employee_id: selectedEmployee,
+      item_name: r.item_name.trim(),
+      note: r.note.trim() || null,
+      qty: 1,
+      subtotal: parseInt(r.price),
+      menu_item_id: null,
+    }))
+    const { error } = await supabase.from('orders').insert(insertRows)
     setSaving(false)
-    if (error) { setMessage('儲存失敗：' + error.message); return }
-    setMessage('已儲存！')
+    if (error) return setMessage('儲存失敗：' + error.message)
+    setMessage('已送出！')
     loadOrders()
   }
 
@@ -103,63 +106,85 @@ export default function HomePage() {
 
   return (
     <div className="space-y-6">
-      <div className="bg-white rounded-xl shadow-sm p-5 border">
-        <div className="flex items-center justify-between mb-1">
-          <h1 className="text-xl font-bold text-gray-800">今日點餐</h1>
-          <span className="text-gray-500 text-sm">{dateLabel}</span>
-        </div>
-        {restaurant ? (
-          <p className="text-orange-600 font-semibold text-lg">
-            {restaurant.name}
-            {restaurant.phone && (
-              <span className="text-gray-400 text-sm font-normal ml-2">☎ {restaurant.phone}</span>
-            )}
-          </p>
-        ) : (
-          <p className="text-gray-400 italic">今日尚未選定餐廳，請管理員至後台設定</p>
-        )}
+      <div className="bg-white rounded-xl shadow-sm p-5 border flex items-center justify-between">
+        <h1 className="text-xl font-bold text-gray-800">今日點餐</h1>
+        <span className="text-gray-500 text-sm">{dateLabel}</span>
       </div>
 
-      {restaurant && (
-        <div className="grid md:grid-cols-2 gap-6">
+      <div className="grid md:grid-cols-2 gap-6">
+        <div className="space-y-4">
+          {/* 菜單圖片 */}
+          {menuImage ? (
+            <div className="bg-white rounded-xl shadow-sm border p-3">
+              <p className="text-sm font-medium text-gray-600 mb-2">今日菜單</p>
+              <img src={menuImage} alt="今日菜單" className="w-full rounded-lg object-contain max-h-80" />
+            </div>
+          ) : (
+            <div className="bg-white rounded-xl shadow-sm border p-5 text-center text-gray-400 italic text-sm">
+              管理員尚未上傳今日菜單
+            </div>
+          )}
+
+          {/* 點餐表單 */}
           <div className="bg-white rounded-xl shadow-sm p-5 border space-y-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">我是</label>
               <select
                 className="w-full border rounded-lg px-3 py-2 text-gray-800 focus:outline-none focus:ring-2 focus:ring-orange-400"
                 value={selectedEmployee}
-                onChange={e => { setSelectedEmployee(e.target.value); setOrderMap({}) }}
+                onChange={e => handleEmployeeChange(e.target.value)}
               >
                 <option value="">-- 請選擇姓名 --</option>
                 {employees.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
               </select>
             </div>
 
-            <div className="space-y-1">
-              <p className="text-sm font-medium text-gray-700 mb-2">菜單</p>
-              {menuItems.map(item => (
-                <div key={item.id} className="flex items-center justify-between py-2 border-b last:border-0">
-                  <div>
-                    <span className="text-gray-800">{item.name}</span>
-                    <span className="text-gray-400 text-sm ml-2">${item.price}</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <button onClick={() => changeQty(item.id, -1)}
-                      className="w-7 h-7 rounded-full bg-gray-100 hover:bg-gray-200 font-bold text-gray-600 leading-none">−</button>
-                    <span className="w-5 text-center font-medium text-gray-800">{orderMap[item.id] ?? 0}</span>
-                    <button onClick={() => changeQty(item.id, 1)}
-                      className="w-7 h-7 rounded-full bg-orange-100 hover:bg-orange-200 font-bold text-orange-600 leading-none">＋</button>
-                  </div>
+            <div>
+              <p className="text-sm font-medium text-gray-700 mb-2">點餐內容</p>
+              <div className="space-y-2">
+                <div className="grid grid-cols-12 gap-1 text-xs text-gray-400 px-1">
+                  <span className="col-span-5">餐點名稱</span>
+                  <span className="col-span-3">價格</span>
+                  <span className="col-span-3">備註</span>
                 </div>
-              ))}
+                {rows.map((row, i) => (
+                  <div key={i} className="grid grid-cols-12 gap-1 items-center">
+                    <input
+                      className="col-span-5 border rounded-lg px-2 py-1.5 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-orange-400"
+                      placeholder="例：排骨飯"
+                      value={row.item_name}
+                      onChange={e => updateRow(i, 'item_name', e.target.value)}
+                    />
+                    <input
+                      className="col-span-3 border rounded-lg px-2 py-1.5 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-orange-400"
+                      placeholder="120"
+                      type="number"
+                      value={row.price}
+                      onChange={e => updateRow(i, 'price', e.target.value)}
+                    />
+                    <input
+                      className="col-span-3 border rounded-lg px-2 py-1.5 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-orange-400"
+                      placeholder="不辣"
+                      value={row.note}
+                      onChange={e => updateRow(i, 'note', e.target.value)}
+                    />
+                    <button onClick={() => removeRow(i)}
+                      className="col-span-1 text-red-300 hover:text-red-500 text-lg leading-none text-center">×</button>
+                  </div>
+                ))}
+              </div>
+              <button onClick={addRow}
+                className="mt-2 text-sm text-orange-500 hover:text-orange-700 font-medium">
+                ＋ 新增一筆
+              </button>
             </div>
 
-            <div className="flex items-center justify-between pt-2">
+            <div className="flex items-center justify-between pt-1">
               <span className="font-semibold text-gray-700">
                 小計：<span className="text-orange-500">${total}</span>
               </span>
               <button onClick={handleSave} disabled={saving}
-                className="bg-orange-500 hover:bg-orange-600 text-white px-5 py-2 rounded-lg font-medium disabled:opacity-50 transition-colors">
+                className="bg-orange-500 hover:bg-orange-600 text-white px-5 py-2 rounded-lg font-medium disabled:opacity-50">
                 {saving ? '儲存中…' : '確認送出'}
               </button>
             </div>
@@ -169,36 +194,37 @@ export default function HomePage() {
               </p>
             )}
           </div>
-
-          <div className="bg-white rounded-xl shadow-sm p-5 border">
-            <h2 className="font-semibold text-gray-700 mb-3">今日訂單統計</h2>
-            {peerOrders.length === 0 ? (
-              <p className="text-gray-400 text-sm italic">還沒有人點餐</p>
-            ) : (
-              <div className="space-y-3">
-                {peerOrders.map(p => (
-                  <div key={p.employee_name} className="border-b pb-2 last:border-0">
-                    <div className="flex justify-between text-sm font-medium text-gray-800">
-                      <span>{p.employee_name}</span>
-                      <span className="text-orange-500">${p.total}</span>
-                    </div>
-                    {p.items.map((i, idx) => (
-                      <div key={idx} className="text-xs text-gray-500 flex justify-between ml-2 mt-0.5">
-                        <span>{i.name} ×{i.qty}</span>
-                        <span>${i.subtotal}</span>
-                      </div>
-                    ))}
-                  </div>
-                ))}
-                <div className="flex justify-between font-bold text-gray-800 pt-1">
-                  <span>今日總計</span>
-                  <span className="text-orange-600">${peerOrders.reduce((s, p) => s + p.total, 0)}</span>
-                </div>
-              </div>
-            )}
-          </div>
         </div>
-      )}
+
+        {/* 今日訂單統計 */}
+        <div className="bg-white rounded-xl shadow-sm p-5 border">
+          <h2 className="font-semibold text-gray-700 mb-3">今日訂單統計</h2>
+          {peerOrders.length === 0 ? (
+            <p className="text-gray-400 text-sm italic">還沒有人點餐</p>
+          ) : (
+            <div className="space-y-3">
+              {peerOrders.map(p => (
+                <div key={p.employee_name} className="border-b pb-2 last:border-0">
+                  <div className="flex justify-between text-sm font-medium text-gray-800 mb-0.5">
+                    <span>{p.employee_name}</span>
+                    <span className="text-orange-500">${p.total}</span>
+                  </div>
+                  {p.items.map((item, idx) => (
+                    <div key={idx} className="text-xs text-gray-500 flex justify-between ml-2 mt-0.5">
+                      <span>{item.name}{item.note ? <span className="text-gray-400">（{item.note}）</span> : ''}</span>
+                      <span>${item.price}</span>
+                    </div>
+                  ))}
+                </div>
+              ))}
+              <div className="flex justify-between font-bold text-gray-800 pt-1">
+                <span>今日總計</span>
+                <span className="text-orange-600">${peerOrders.reduce((s, p) => s + p.total, 0)}</span>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   )
 }
