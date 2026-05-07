@@ -22,6 +22,7 @@ export default function AdminPage() {
   const [menuImage, setMenuImage] = useState<string | null>(null)
   const [menuUploading, setMenuUploading] = useState(false)
   const menuFileRef = useRef<HTMLInputElement>(null)
+  const [orderView, setOrderView] = useState<'person' | 'item'>('person')
 
   const [newRestName, setNewRestName] = useState('')
   const [newRestPhone, setNewRestPhone] = useState('')
@@ -96,7 +97,13 @@ export default function AdminPage() {
     if (!file) return
     setMenuUploading(true)
     const dataUrl = await compressImage(file)
-    await supabase.from('daily_schedule').upsert({ date: today, menu_image: dataUrl }, { onConflict: 'date' })
+    const cutoff = new Date()
+    cutoff.setDate(cutoff.getDate() - 90)
+    const cutoffStr = cutoff.toISOString().slice(0, 10)
+    await Promise.all([
+      supabase.from('daily_schedule').upsert({ date: today, menu_image: dataUrl }, { onConflict: 'date' }),
+      supabase.from('daily_schedule').update({ menu_image: null }).lt('date', cutoffStr).not('menu_image', 'is', null),
+    ])
     setMenuImage(dataUrl)
     setMenuUploading(false)
     flash('菜單圖片已上傳')
@@ -242,19 +249,35 @@ export default function AdminPage() {
           </div>
 
           <div className="bg-white rounded-xl border shadow-sm p-5">
-            <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
               <h2 className="font-semibold text-gray-700">
                 今日訂單（{todayOrders.length > 0 ? `${todayOrders.length} 筆` : '尚無訂單'}）
               </h2>
-              {todayOrders.length > 0 && (
-                <button onClick={copyOrderList} className="text-sm bg-gray-100 hover:bg-gray-200 px-3 py-1.5 rounded-lg font-medium">
-                  複製叫餐清單
-                </button>
-              )}
+              <div className="flex items-center gap-2">
+                {todayOrders.length > 0 && (
+                  <>
+                    <div className="flex rounded-lg overflow-hidden border text-sm">
+                      <button
+                        onClick={() => setOrderView('person')}
+                        className={`px-3 py-1.5 ${orderView === 'person' ? 'bg-orange-500 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}>
+                        依員工
+                      </button>
+                      <button
+                        onClick={() => setOrderView('item')}
+                        className={`px-3 py-1.5 ${orderView === 'item' ? 'bg-orange-500 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}>
+                        依品項
+                      </button>
+                    </div>
+                    <button onClick={copyOrderList} className="text-sm bg-gray-100 hover:bg-gray-200 px-3 py-1.5 rounded-lg font-medium">
+                      複製叫餐清單
+                    </button>
+                  </>
+                )}
+              </div>
             </div>
             {todayOrders.length === 0 ? (
               <p className="text-gray-400 text-sm italic">還沒有人點餐</p>
-            ) : (
+            ) : orderView === 'person' ? (
               <table className="w-full text-sm">
                 <thead>
                   <tr className="text-gray-500 border-b">
@@ -284,7 +307,48 @@ export default function AdminPage() {
                   </tr>
                 </tbody>
               </table>
-            )}
+            ) : (() => {
+              // 依品項分組
+              const itemMap: Record<string, { count: number; total: number; persons: string[]; note: string }> = {}
+              for (const o of todayOrders as any[]) {
+                const key = o.item_name ?? ''
+                if (!itemMap[key]) itemMap[key] = { count: 0, total: 0, persons: [], note: o.note ?? '' }
+                itemMap[key].count += o.qty ?? 1
+                itemMap[key].total += o.subtotal
+                itemMap[key].persons.push(o.employees?.name ?? '未知')
+              }
+              const items = Object.entries(itemMap).sort((a, b) => b[1].count - a[1].count)
+              return (
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-gray-500 border-b">
+                      <th className="text-left py-1">品項</th>
+                      <th className="text-left py-1">誰點的</th>
+                      <th className="text-right py-1">份數</th>
+                      <th className="text-right py-1">小計</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {items.map(([name, info]) => (
+                      <tr key={name} className="border-b last:border-0">
+                        <td className="py-1.5 text-gray-700">
+                          <div>{name}</div>
+                          {info.note && <div className="text-xs text-blue-500">備註：{info.note}</div>}
+                        </td>
+                        <td className="py-1.5 text-gray-500 text-xs">{info.persons.join('、')}</td>
+                        <td className="py-1.5 text-right font-semibold text-gray-700">× {info.count}</td>
+                        <td className="py-1.5 text-right text-orange-500">${info.total}</td>
+                      </tr>
+                    ))}
+                    <tr className="font-bold">
+                      <td colSpan={2} className="pt-2 text-gray-700">合計</td>
+                      <td className="pt-2 text-right text-gray-700">× {(todayOrders as any[]).reduce((s, o) => s + (o.qty ?? 1), 0)}</td>
+                      <td className="pt-2 text-right text-orange-600">${(todayOrders as any[]).reduce((s, o) => s + o.subtotal, 0)}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              )
+            })()}
           </div>
         </div>
       )}
