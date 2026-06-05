@@ -21,13 +21,15 @@ export default function ReportPage() {
   const load = useCallback(async () => {
     setLoading(true)
     const from = `${year}-${String(month).padStart(2, '0')}-01`
-    const to = `${year}-${String(month).padStart(2, '0')}-31`
+    const nextMonth = month === 12 ? 1 : month + 1
+    const nextYear = month === 12 ? year + 1 : year
+    const to = `${nextYear}-${String(nextMonth).padStart(2, '0')}-01`
 
     const { data } = await supabase
       .from('orders')
       .select('date, qty, subtotal, item_name, note, employees(name)')
       .gte('date', from)
-      .lte('date', to)
+      .lt('date', to)
       .order('date')
 
     setLoading(false)
