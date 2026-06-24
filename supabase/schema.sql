@@ -27,22 +27,33 @@ create table if not exists menu_items (
   created_at timestamptz default now()
 );
 
--- 每日排班表（今天吃哪家）
+-- 每日設定表（每天、每個分類各一筆：上傳菜單圖片＋本日店家名稱）
+-- category：lunch=午餐, drinks=飲料點心, celebration=慶祝活動
 create table if not exists daily_schedule (
   id uuid primary key default gen_random_uuid(),
-  date date not null unique,
+  date date not null,
+  category text not null default 'lunch',
   restaurant_id uuid references restaurants(id),
-  created_at timestamptz default now()
+  restaurant_name text,
+  menu_image text,
+  created_at timestamptz default now(),
+  unique(date, category)
 );
 
 -- 訂單表
+-- category：lunch=午餐, drinks=飲料點心, celebration=慶祝活動
+-- rating：1~5 顆星，未評分為 null
 create table if not exists orders (
   id uuid primary key default gen_random_uuid(),
   date date not null,
+  category text not null default 'lunch',
   employee_id uuid references employees(id),
   menu_item_id uuid references menu_items(id),
+  item_name text,
+  note text,
   qty int not null default 1,
   subtotal int not null,
+  rating int,
   created_at timestamptz default now(),
   unique(date, employee_id, menu_item_id)
 );
