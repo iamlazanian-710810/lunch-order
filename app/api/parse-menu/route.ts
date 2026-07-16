@@ -28,12 +28,26 @@ export async function POST(req: NextRequest) {
 價格請填整數（元），若看不清楚價格則填 0。`
 
     const genAI = new GoogleGenerativeAI(geminiKey)
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash-lite' })
-    const result = await model.generateContent([
-      prompt,
-      { inlineData: { data: image, mimeType } },
-    ])
-    const text = result.response.text()
+    // Free-tier models get rate-limited at peak times; fall through the
+    // chain instead of failing on the first 429/503.
+    const MODELS = ['gemini-2.0-flash-lite', 'gemini-2.5-flash', 'gemini-3-flash-preview']
+    let text = ''
+    let lastErr: any = null
+    for (const name of MODELS) {
+      try {
+        const model = genAI.getGenerativeModel({ model: name })
+        const result = await model.generateContent([
+          prompt,
+          { inlineData: { data: image, mimeType } },
+        ])
+        text = result.response.text()
+        if (text) break
+      } catch (e: any) {
+        lastErr = e
+        console.error('parse-menu model failed:', name, e?.status || e?.message)
+      }
+    }
+    if (!text) throw lastErr || new Error('AI 沒有回傳內容')
 
     const jsonMatch = text.match(/\{[\s\S]*\}/)
     if (!jsonMatch) return Response.json({ error: '辨識結果格式異常，請重試', raw: text }, { status: 500 })
