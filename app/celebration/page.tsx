@@ -1,5 +1,5 @@
-import OrderBoard from '../components/OrderBoard'
+import CelebrationBoard from '../components/CelebrationBoard'
 
 export default function CelebrationPage() {
-  return <OrderBoard category="celebration" title="今日點餐 — 慶祝活動" accent="rose" />
+  return <CelebrationBoard />
 }

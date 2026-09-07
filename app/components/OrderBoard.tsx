@@ -1,22 +1,26 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
-import { supabase, type Employee, type Category } from '@/lib/supabase'
+import { useEffect, useMemo, useState, useCallback } from 'react'
+import { supabase, type Employee, type DailyCategory } from '@/lib/supabase'
+import { todayStr, tomorrowStr, dateLabel, type DayKey } from '@/lib/date'
 
 type OrderRow = { item_name: string; price: string; note: string }
 type PeerOrder = { employee_name: string; items: { id: string; name: string; price: number; note: string }[]; total: number }
-
-const today = new Date().toISOString().slice(0, 10)
 
 export default function OrderBoard({
   category,
   title,
   accent = 'orange',
 }: {
-  category: Category
+  category: DailyCategory
   title: string
-  accent?: 'orange' | 'sky' | 'rose'
+  accent?: 'orange' | 'sky'
 }) {
+  // 今日/明日的日期在元件掛載時算一次（用本機時區，不是 UTC）
+  const dates = useMemo(() => ({ today: todayStr(), tomorrow: tomorrowStr() }), [])
+  const [day, setDay] = useState<DayKey>('today')
+  const date = dates[day]
+
   const [employees, setEmployees] = useState<Employee[]>([])
   const [selectedEmployee, setSelectedEmployee] = useState('')
   const [menuImage, setMenuImage] = useState<string | null>(null)
@@ -27,30 +31,33 @@ export default function OrderBoard({
   const [message, setMessage] = useState('')
   const [lightbox, setLightbox] = useState(false)
 
-  // 主題色（午餐橘、飲料天藍、慶祝玫瑰）
+  // 主題色（午餐橘、飲料天藍）
   const c = {
-    orange: { ring: 'focus:ring-orange-400', text: 'text-orange-500', text2: 'text-orange-400', text3: 'text-orange-600', btn: 'bg-orange-500 hover:bg-orange-600', link: 'text-orange-500 hover:text-orange-700' },
-    sky: { ring: 'focus:ring-sky-400', text: 'text-sky-500', text2: 'text-sky-400', text3: 'text-sky-600', btn: 'bg-sky-500 hover:bg-sky-600', link: 'text-sky-500 hover:text-sky-700' },
-    rose: { ring: 'focus:ring-rose-400', text: 'text-rose-500', text2: 'text-rose-400', text3: 'text-rose-600', btn: 'bg-rose-500 hover:bg-rose-600', link: 'text-rose-500 hover:text-rose-700' },
+    orange: { ring: 'focus:ring-orange-400', text: 'text-orange-500', text2: 'text-orange-400', text3: 'text-orange-600', btn: 'bg-orange-500 hover:bg-orange-600', link: 'text-orange-500 hover:text-orange-700', tab: 'bg-orange-500', border: 'border-orange-200', soft: 'bg-orange-50' },
+    sky: { ring: 'focus:ring-sky-400', text: 'text-sky-500', text2: 'text-sky-400', text3: 'text-sky-600', btn: 'bg-sky-500 hover:bg-sky-600', link: 'text-sky-500 hover:text-sky-700', tab: 'bg-sky-500', border: 'border-sky-200', soft: 'bg-sky-50' },
   }[accent]
 
-  const loadBase = useCallback(async () => {
-    const [{ data: emps }, { data: sched }] = await Promise.all([
-      supabase.from('employees').select('*').order('name'),
-      supabase.from('daily_schedule').select('menu_image, restaurant_name').eq('date', today).eq('category', category).maybeSingle(),
-    ])
-    setEmployees(emps ?? [])
-    setMenuImage((sched as any)?.menu_image ?? null)
-    setStoreName((sched as any)?.restaurant_name ?? null)
-  }, [category])
+  const loadEmployees = useCallback(async () => {
+    const { data } = await supabase.from('employees').select('*').order('name')
+    setEmployees(data ?? [])
+  }, [])
+
+  const loadDay = useCallback(async () => {
+    const { data } = await supabase
+      .from('daily_schedule')
+      .select('menu_image, restaurant_name')
+      .eq('date', date).eq('category', category).maybeSingle()
+    setMenuImage((data as any)?.menu_image ?? null)
+    setStoreName((data as any)?.restaurant_name ?? null)
+  }, [date, category])
 
   const loadOrders = useCallback(async () => {
     const { data } = await supabase
       .from('orders')
       .select('id, item_name, subtotal, note, employee_id, employees(name)')
-      .eq('date', today)
+      .eq('date', date)
       .eq('category', category)
-    if (!data) return
+    if (!data) return setPeerOrders([])
 
     const map: Record<string, PeerOrder> = {}
     for (const o of data as any[]) {
@@ -60,13 +67,14 @@ export default function OrderBoard({
       map[empName].total += o.subtotal
     }
     setPeerOrders(Object.values(map).sort((a, b) => a.employee_name.localeCompare(b.employee_name, 'zh-TW')))
-  }, [category])
+  }, [date, category])
 
   const loadMyOrders = useCallback(async (empId: string) => {
+    if (!empId) return setRows([{ item_name: '', price: '', note: '' }])
     const { data } = await supabase
       .from('orders')
       .select('item_name, subtotal, note')
-      .eq('date', today)
+      .eq('date', date)
       .eq('category', category)
       .eq('employee_id', empId)
     if (data && data.length > 0) {
@@ -74,26 +82,32 @@ export default function OrderBoard({
     } else {
       setRows([{ item_name: '', price: '', note: '' }])
     }
-  }, [category])
+  }, [date, category])
 
-  useEffect(() => { loadBase() }, [loadBase])
+  useEffect(() => { loadEmployees() }, [loadEmployees])
+  useEffect(() => { loadDay() }, [loadDay])
   useEffect(() => { loadOrders() }, [loadOrders])
+  // 切換今日/明日時，重新載入自己在那一天的訂單
+  useEffect(() => {
+    loadMyOrders(selectedEmployee)
+    setMessage('')
+  }, [loadMyOrders]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleEmployeeChange = (id: string) => {
     setSelectedEmployee(id)
     setMessage('')
-    if (id) loadMyOrders(id)
-    else setRows([{ item_name: '', price: '', note: '' }])
+    loadMyOrders(id)
   }
 
-  const updateRow = (i: number, field: keyof OrderRow, val: string) => {
+  const updateRow = (i: number, field: keyof OrderRow, val: string) =>
     setRows(prev => prev.map((r, idx) => idx === i ? { ...r, [field]: val } : r))
-  }
 
   const addRow = () => setRows(prev => [...prev, { item_name: '', price: '', note: '' }])
   const removeRow = (i: number) => setRows(prev => prev.length === 1 ? prev : prev.filter((_, idx) => idx !== i))
 
   const total = rows.reduce((s, r) => s + (parseInt(r.price) || 0), 0)
+
+  const dayWord = day === 'today' ? '今日' : '明日'
 
   const handleSave = async () => {
     if (!selectedEmployee) return setMessage('請先選擇姓名')
@@ -101,10 +115,11 @@ export default function OrderBoard({
     if (valid.length === 0) return setMessage('請至少填一筆餐點名稱與價格')
     setSaving(true)
     setMessage('')
-    // 只刪除「本分類」的當日紀錄，不會影響其他分類
-    await supabase.from('orders').delete().eq('date', today).eq('category', category).eq('employee_id', selectedEmployee)
+    // 只刪除「這一天 + 這個分類」的紀錄，不會影響另一天或其他分類
+    await supabase.from('orders').delete()
+      .eq('date', date).eq('category', category).eq('employee_id', selectedEmployee)
     const insertRows = valid.map(r => ({
-      date: today,
+      date,
       category,
       employee_id: selectedEmployee,
       item_name: r.item_name.trim(),
@@ -116,7 +131,7 @@ export default function OrderBoard({
     const { error } = await supabase.from('orders').insert(insertRows)
     setSaving(false)
     if (error) return setMessage('儲存失敗：' + error.message)
-    setMessage('已送出！')
+    setMessage('已送出！（' + dayWord + '）')
     loadOrders()
   }
 
@@ -126,15 +141,34 @@ export default function OrderBoard({
     loadMyOrders(selectedEmployee)
   }
 
-  const dateLabel = new Date(today + 'T12:00:00').toLocaleDateString('zh-TW', {
-    month: 'long', day: 'numeric', weekday: 'long',
-  })
+  const dayTabClass = (k: DayKey) =>
+    `flex-1 px-4 py-2.5 rounded-lg text-sm font-semibold transition-colors ${
+      day === k ? `${c.tab} text-white shadow-sm` : 'bg-white text-gray-500 hover:bg-gray-50 border'
+    }`
+
+  const myName = employees.find(e => e.id === selectedEmployee)?.name
 
   return (
-    <div className="space-y-6">
-      <div className="bg-white rounded-xl shadow-sm p-5 border flex items-center justify-between">
-        <h1 className="text-xl font-bold text-gray-800">{title}</h1>
-        <span className="text-gray-500 text-sm">{dateLabel}</span>
+    <div className="space-y-5">
+      <div className="bg-white rounded-xl shadow-sm p-5 border">
+        <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+          <h1 className="text-xl font-bold text-gray-800">{title}</h1>
+          <span className={`text-sm font-medium ${c.text}`}>{dateLabel(date)}</span>
+        </div>
+        {/* 今日 / 明日 切換 */}
+        <div className="flex gap-2">
+          <button className={dayTabClass('today')} onClick={() => setDay('today')}>
+            今日 · {dateLabel(dates.today)}
+          </button>
+          <button className={dayTabClass('tomorrow')} onClick={() => setDay('tomorrow')}>
+            明日預訂 · {dateLabel(dates.tomorrow)}
+          </button>
+        </div>
+        {day === 'tomorrow' && (
+          <p className={`mt-3 text-xs text-gray-500 ${c.soft} border ${c.border} rounded-lg px-3 py-2`}>
+            這是<span className="font-semibold">明天（{dateLabel(dates.tomorrow)}）</span>的預訂，和今天的訂單完全分開計算。到了明天，這筆會自動變成「今日」的訂單。
+          </p>
+        )}
       </div>
 
       <div className="grid md:grid-cols-2 gap-6">
@@ -144,14 +178,15 @@ export default function OrderBoard({
             <div className="bg-white rounded-xl shadow-sm border p-3">
               <div className="flex items-center justify-between mb-2">
                 <p className="text-sm font-medium text-gray-600">
-                  今日店家：{storeName ? <span className={`font-semibold ${c.text}`}>{storeName}</span> : <span className="text-gray-400">未填寫</span>}
+                  {dayWord}店家：
+                  {storeName ? <span className={`font-semibold ${c.text}`}>{storeName}</span> : <span className="text-gray-400">未填寫</span>}
                 </p>
                 {menuImage && <span className="text-xs text-gray-400">點圖放大</span>}
               </div>
               {menuImage && (
                 <img
                   src={menuImage}
-                  alt="今日菜單"
+                  alt="菜單"
                   className="w-full rounded-lg object-contain max-h-80 cursor-zoom-in"
                   onClick={() => setLightbox(true)}
                 />
@@ -159,7 +194,7 @@ export default function OrderBoard({
             </div>
           ) : (
             <div className="bg-white rounded-xl shadow-sm border p-5 text-center text-gray-400 italic text-sm">
-              管理員尚未設定今日店家與菜單
+              管理員尚未設定{dayWord}的店家與菜單
             </div>
           )}
 
@@ -178,7 +213,12 @@ export default function OrderBoard({
             </div>
 
             <div>
-              <p className="text-sm font-medium text-gray-700 mb-2">點餐內容</p>
+              <p className="text-sm font-medium text-gray-700 mb-2">
+                點餐內容
+                <span className="ml-2 text-xs font-normal text-gray-400">
+                  （{dayWord} {dateLabel(date)}）
+                </span>
+              </p>
               <div className="space-y-2">
                 <div className="grid grid-cols-12 gap-1 text-xs text-gray-400 px-1">
                   <span className="col-span-5">餐點名稱</span>
@@ -211,10 +251,7 @@ export default function OrderBoard({
                   </div>
                 ))}
               </div>
-              <button onClick={addRow}
-                className={`mt-2 text-sm font-medium ${c.link}`}>
-                ＋ 新增一筆
-              </button>
+              <button onClick={addRow} className={`mt-2 text-sm font-medium ${c.link}`}>＋ 新增一筆</button>
             </div>
 
             <div className="flex items-center justify-between pt-1">
@@ -223,7 +260,7 @@ export default function OrderBoard({
               </span>
               <button onClick={handleSave} disabled={saving}
                 className={`${c.btn} text-white px-5 py-2 rounded-lg font-medium disabled:opacity-50`}>
-                {saving ? '儲存中…' : '確認送出'}
+                {saving ? '儲存中…' : `確認送出（${dayWord}）`}
               </button>
             </div>
             {message && (
@@ -234,11 +271,16 @@ export default function OrderBoard({
           </div>
         </div>
 
-        {/* 今日訂單統計 */}
+        {/* 訂單統計 */}
         <div className="bg-white rounded-xl shadow-sm p-5 border">
-          <h2 className="font-semibold text-gray-700 mb-3">今日訂單統計</h2>
+          <h2 className="font-semibold text-gray-700 mb-3">
+            {dayWord}訂單統計
+            <span className="ml-2 text-xs font-normal text-gray-400">{dateLabel(date)}</span>
+          </h2>
           {peerOrders.length === 0 ? (
-            <p className="text-gray-400 text-sm italic">還沒有人點餐</p>
+            <p className="text-gray-400 text-sm italic">
+              {day === 'today' ? '還沒有人點餐' : '還沒有人預訂明天'}
+            </p>
           ) : (
             <div className="space-y-3">
               {peerOrders.map(p => (
@@ -253,21 +295,19 @@ export default function OrderBoard({
                         <span className="flex-1">{item.name}</span>
                         <div className="flex items-center gap-1.5">
                           <span className={c.text2}>${item.price}</span>
-                          {selectedEmployee && p.employee_name === employees.find(e => e.id === selectedEmployee)?.name && (
+                          {myName && p.employee_name === myName && (
                             <button onClick={() => deleteMyOrder(item.id)}
                               className="text-red-300 hover:text-red-500 text-base leading-none">×</button>
                           )}
                         </div>
                       </div>
-                      {item.note && (
-                        <div className="text-xs text-blue-500 mt-0.5">備註：{item.note}</div>
-                      )}
+                      {item.note && <div className="text-xs text-blue-500 mt-0.5">備註：{item.note}</div>}
                     </div>
                   ))}
                 </div>
               ))}
               <div className="flex justify-between font-bold text-gray-800 pt-1">
-                <span>今日總計</span>
+                <span>{dayWord}總計</span>
                 <span className={c.text3}>${peerOrders.reduce((s, p) => s + p.total, 0)}</span>
               </div>
             </div>
@@ -277,19 +317,11 @@ export default function OrderBoard({
 
       {/* Lightbox */}
       {lightbox && menuImage && (
-        <div
-          className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4"
-          onClick={() => setLightbox(false)}
-        >
-          <img
-            src={menuImage}
-            alt="今日菜單"
-            className="max-w-full max-h-full rounded-lg object-contain"
-          />
-          <button
-            className="absolute top-4 right-4 text-white text-3xl leading-none hover:text-gray-300"
-            onClick={() => setLightbox(false)}
-          >×</button>
+        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4"
+          onClick={() => setLightbox(false)}>
+          <img src={menuImage} alt="菜單" className="max-w-full max-h-full rounded-lg object-contain" />
+          <button className="absolute top-4 right-4 text-white text-3xl leading-none hover:text-gray-300"
+            onClick={() => setLightbox(false)}>×</button>
         </div>
       )}
     </div>
