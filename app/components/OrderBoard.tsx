@@ -42,21 +42,27 @@ export default function OrderBoard({
     setEmployees(data ?? [])
   }, [])
 
-  const loadDay = useCallback(async () => {
+  // 切換今日/明日時，前一次還沒回來的查詢不可以覆蓋新的結果，
+  // 否則會出現「切到明日卻顯示今日菜單」——照錯菜單點餐
+  const stale = () => false
+
+  const loadDay = useCallback(async (isStale: () => boolean = stale) => {
     const { data } = await supabase
       .from('daily_schedule')
       .select('menu_image, restaurant_name')
       .eq('date', date).eq('category', category).maybeSingle()
+    if (isStale()) return
     setMenuImage((data as any)?.menu_image ?? null)
     setStoreName((data as any)?.restaurant_name ?? null)
   }, [date, category])
 
-  const loadOrders = useCallback(async () => {
+  const loadOrders = useCallback(async (isStale: () => boolean = stale) => {
     const { data } = await supabase
       .from('orders')
       .select('id, item_name, subtotal, note, employee_id, employees(name)')
       .eq('date', date)
       .eq('category', category)
+    if (isStale()) return
     if (!data) return setPeerOrders([])
 
     const map: Record<string, PeerOrder> = {}
@@ -69,7 +75,7 @@ export default function OrderBoard({
     setPeerOrders(Object.values(map).sort((a, b) => a.employee_name.localeCompare(b.employee_name, 'zh-TW')))
   }, [date, category])
 
-  const loadMyOrders = useCallback(async (empId: string) => {
+  const loadMyOrders = useCallback(async (empId: string, isStale: () => boolean = stale) => {
     if (!empId) return setRows([{ item_name: '', price: '', note: '' }])
     const { data } = await supabase
       .from('orders')
@@ -77,6 +83,7 @@ export default function OrderBoard({
       .eq('date', date)
       .eq('category', category)
       .eq('employee_id', empId)
+    if (isStale()) return
     if (data && data.length > 0) {
       setRows(data.map((o: any) => ({ item_name: o.item_name ?? '', price: String(o.subtotal), note: o.note ?? '' })))
     } else {
@@ -85,12 +92,25 @@ export default function OrderBoard({
   }, [date, category])
 
   useEffect(() => { loadEmployees() }, [loadEmployees])
-  useEffect(() => { loadDay() }, [loadDay])
-  useEffect(() => { loadOrders() }, [loadOrders])
+
+  useEffect(() => {
+    let cancelled = false
+    loadDay(() => cancelled)
+    return () => { cancelled = true }
+  }, [loadDay])
+
+  useEffect(() => {
+    let cancelled = false
+    loadOrders(() => cancelled)
+    return () => { cancelled = true }
+  }, [loadOrders])
+
   // 切換今日/明日時，重新載入自己在那一天的訂單
   useEffect(() => {
-    loadMyOrders(selectedEmployee)
+    let cancelled = false
+    loadMyOrders(selectedEmployee, () => cancelled)
     setMessage('')
+    return () => { cancelled = true }
   }, [loadMyOrders]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleEmployeeChange = (id: string) => {

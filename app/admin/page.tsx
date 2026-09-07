@@ -120,11 +120,13 @@ export default function AdminPage() {
     setEvSelected(prev => prev || list[0]?.id || '')
   }, [])
 
-  const loadEventOrders = useCallback(async () => {
+  // 切換活動時，前一個活動的慢回應不可以覆蓋新活動的訂單
+  const loadEventOrders = useCallback(async (isStale: () => boolean = () => false) => {
     if (!evSelected) return setEvOrders([])
     const { data } = await supabase.from('orders')
       .select('id, item_name, qty, subtotal, note, employees(name)')
       .eq('category', 'celebration').eq('event_id', evSelected)
+    if (isStale()) return
     setEvOrders(data ?? [])
   }, [evSelected])
 
@@ -149,7 +151,12 @@ export default function AdminPage() {
   }, [rYear, rMonth])
 
   useEffect(() => { if (verified) { load(); loadEvents() } }, [load, loadEvents, verified])
-  useEffect(() => { if (verified) loadEventOrders() }, [loadEventOrders, verified])
+  useEffect(() => {
+    if (!verified) return
+    let cancelled = false
+    loadEventOrders(() => cancelled)
+    return () => { cancelled = true }
+  }, [loadEventOrders, verified])
   useEffect(() => { if (tab === 'ratings' && verified) loadRatings() }, [tab, loadRatings, verified])
 
   // ---------- 圖片壓縮 ----------

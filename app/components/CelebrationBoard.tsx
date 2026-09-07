@@ -42,13 +42,17 @@ export default function CelebrationBoard() {
     setLoading(false)
   }, [])
 
-  const loadOrders = useCallback(async () => {
+  // 切換活動時，前一個活動還沒回來的查詢不可以覆蓋新活動的結果
+  const stale = () => false
+
+  const loadOrders = useCallback(async (isStale: () => boolean = stale) => {
     if (!eventId) return setPeerOrders([])
     const { data } = await supabase
       .from('orders')
       .select('id, item_name, subtotal, note, employee_id, employees(name)')
       .eq('category', 'celebration')
       .eq('event_id', eventId)
+    if (isStale()) return
     if (!data) return setPeerOrders([])
     const map: Record<string, PeerOrder> = {}
     for (const o of data as any[]) {
@@ -60,7 +64,7 @@ export default function CelebrationBoard() {
     setPeerOrders(Object.values(map).sort((a, b) => a.employee_name.localeCompare(b.employee_name, 'zh-TW')))
   }, [eventId])
 
-  const loadMyOrders = useCallback(async (empId: string) => {
+  const loadMyOrders = useCallback(async (empId: string, isStale: () => boolean = stale) => {
     if (!empId || !eventId) return setRows([{ item_name: '', price: '', note: '' }])
     const { data } = await supabase
       .from('orders')
@@ -68,6 +72,7 @@ export default function CelebrationBoard() {
       .eq('category', 'celebration')
       .eq('event_id', eventId)
       .eq('employee_id', empId)
+    if (isStale()) return
     if (data && data.length > 0) {
       setRows(data.map((o: any) => ({ item_name: o.item_name ?? '', price: String(o.subtotal), note: o.note ?? '' })))
     } else {
@@ -76,10 +81,18 @@ export default function CelebrationBoard() {
   }, [eventId])
 
   useEffect(() => { loadEvents() }, [loadEvents])
-  useEffect(() => { loadOrders() }, [loadOrders])
+
   useEffect(() => {
-    loadMyOrders(selectedEmployee)
+    let cancelled = false
+    loadOrders(() => cancelled)
+    return () => { cancelled = true }
+  }, [loadOrders])
+
+  useEffect(() => {
+    let cancelled = false
+    loadMyOrders(selectedEmployee, () => cancelled)
     setMessage('')
+    return () => { cancelled = true }
   }, [loadMyOrders]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleEmployeeChange = (id: string) => {
