@@ -6,6 +6,7 @@ import {
 } from '@/lib/supabase'
 import { dateLabel } from '@/lib/date'
 import { StarRate } from '../components/Stars'
+import Planet from '../components/Planet'
 
 type OrderRec = {
   id: string; date: string; category: Category; employee_id: string
@@ -142,9 +143,9 @@ export default function ReportPage() {
 
   const OrderTable = ({ items }: { items: OrderRec[] }) => (
     <div className="overflow-x-auto">
-      <table className="w-full text-sm min-w-[520px]">
+      <table className="w-full text-sm min-w-[520px] cosmic-table">
         <thead>
-          <tr className="text-gray-400 border-b">
+          <tr className="border-b">
             <th className="text-left px-5 py-2">員工</th>
             <th className="text-left px-2 py-2">餐點</th>
             <th className="text-left px-2 py-2">備註</th>
@@ -157,11 +158,11 @@ export default function ReportPage() {
             const mine = !!me && o.employee_id === me
             return (
               <tr key={o.id} className="border-b last:border-0">
-                <td className="px-5 py-2 text-gray-700 whitespace-nowrap">{o.employees?.name}</td>
-                <td className="px-2 py-2 text-gray-700">{o.item_name}</td>
-                <td className="px-2 py-2 text-blue-500 text-xs">{o.note ?? ''}</td>
-                <td className="px-2 py-2 text-right text-orange-500">${o.subtotal}</td>
-                <td className="px-3 py-2 text-center">
+                <td className="px-5 py-2.5 text-white whitespace-nowrap">{o.employees?.name}</td>
+                <td className="px-2 py-2.5 text-gray-700">{o.item_name}</td>
+                <td className="px-2 py-2.5 cosmic-memo text-xs">{o.note ?? ''}</td>
+                <td className="px-2 py-2.5 text-right text-white cosmic-num">${o.subtotal}</td>
+                <td className="px-3 py-2.5 text-center">
                   {mine ? (
                     <StarRate value={o.rating} onRate={n => rate(o.id, n)} />
                   ) : o.rating ? (
@@ -179,25 +180,30 @@ export default function ReportPage() {
   )
 
   const accentText: Record<Category, string> = {
-    lunch: 'text-orange-500', drinks: 'text-sky-500', celebration: 'text-rose-500',
+    lunch: 'cat-lunch', drinks: 'cat-drinks', celebration: 'cat-celebration',
   }
 
   return (
-    <div className="space-y-5">
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <h1 className="text-xl font-bold text-gray-800">月結報表</h1>
+    <div className="space-y-5" data-theme="admin">
+      <div className="glass-card glass-card--accent p-5 space-y-4">
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex flex-col gap-1.5">
+            <span className="cosmic-eyebrow">MONTHLY LEDGER</span>
+            <h1 className="cosmic-title text-2xl sm:text-3xl">月結報表</h1>
+          </div>
+          <Planet className="shrink-0" />
+        </div>
         <div className="flex gap-2 items-center flex-wrap">
           <select value={year} onChange={e => setYear(Number(e.target.value))}
-            className="border rounded-lg px-3 py-1.5 text-gray-700 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400">
+            className="cosmic-field cosmic-field--sm cosmic-num" style={{ width: 'auto' }}>
             {years.map(y => <option key={y} value={y}>{y} 年</option>)}
           </select>
           <select value={month} onChange={e => setMonth(Number(e.target.value))}
-            className="border rounded-lg px-3 py-1.5 text-gray-700 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400">
+            className="cosmic-field cosmic-field--sm cosmic-num" style={{ width: 'auto' }}>
             {months.map(m => <option key={m} value={m}>{m} 月</option>)}
           </select>
           {orders.length > 0 && (
-            <button onClick={exportExcel}
-              className="bg-green-500 hover:bg-green-600 text-white px-4 py-1.5 rounded-lg text-sm font-medium">
+            <button onClick={exportExcel} className="cosmic-btn-ok text-sm">
               匯出 Excel
             </button>
           )}
@@ -205,14 +211,14 @@ export default function ReportPage() {
       </div>
 
       {/* 我是（評分用） */}
-      <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-center gap-3 flex-wrap">
-        <span className="text-sm text-amber-700 font-medium">幫餐點評分：我是</span>
+      <div className="cosmic-soft p-4 flex items-center gap-3 flex-wrap">
+        <span className="text-sm text-white font-medium">幫餐點評分：我是</span>
         <select value={me} onChange={e => setMe(e.target.value)}
-          className="border border-amber-300 rounded-lg px-3 py-1.5 text-gray-700 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400">
+          className="cosmic-field cosmic-field--sm" style={{ width: 'auto' }}>
           <option value="">-- 請選擇你的姓名 --</option>
           {employees.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
         </select>
-        <span className="text-xs text-amber-600">
+        <span className="text-xs text-gray-600">
           {me ? '在下方找到自己點的餐，點星星即可評分（1～5 星，再點同一顆可取消）' : '選擇姓名後，就能幫自己點過的餐點打星星'}
         </span>
       </div>
@@ -220,7 +226,7 @@ export default function ReportPage() {
       {loading && <p className="text-gray-400 text-center py-8">載入中…</p>}
 
       {!loading && orders.length === 0 && (
-        <div className="bg-white rounded-xl border shadow-sm p-8 text-center text-gray-400 italic">
+        <div className="glass-card p-8 text-center text-gray-400 italic">
           {year} 年 {month} 月沒有訂餐記錄
         </div>
       )}
@@ -228,35 +234,35 @@ export default function ReportPage() {
       {!loading && orders.length > 0 && (
         <>
           {/* 費用總表 */}
-          <div className="bg-white rounded-xl border shadow-sm p-5">
-            <h2 className="font-semibold text-gray-700 mb-3">{year} 年 {month} 月 — 費用總表</h2>
+          <div className="glass-card p-5">
+            <h2 className="text-lg font-bold text-white mb-3"><span className="cosmic-num">{year}</span> 年 <span className="cosmic-num">{month}</span> 月　費用總表</h2>
             <div className="overflow-x-auto">
-              <table className="w-full text-sm min-w-[480px]">
+              <table className="w-full text-sm min-w-[480px] cosmic-table">
                 <thead>
-                  <tr className="text-gray-500 border-b">
+                  <tr className="border-b">
                     <th className="text-left py-1.5">員工</th>
-                    <th className="text-right py-1.5">午餐</th>
-                    <th className="text-right py-1.5">飲料點心</th>
-                    <th className="text-right py-1.5">慶祝活動</th>
+                    <th className="text-right py-1.5 cat-lunch">午餐</th>
+                    <th className="text-right py-1.5 cat-drinks">飲料點心</th>
+                    <th className="text-right py-1.5 cat-celebration">慶祝活動</th>
                     <th className="text-right py-1.5">合計</th>
                   </tr>
                 </thead>
                 <tbody>
                   {empNames.map(name => (
                     <tr key={name} className="border-b last:border-0">
-                      <td className="py-2 text-gray-800">{name}</td>
-                      <td className="py-2 text-right text-gray-600">${empTotal(name, 'lunch')}</td>
-                      <td className="py-2 text-right text-gray-600">${empTotal(name, 'drinks')}</td>
-                      <td className="py-2 text-right text-gray-600">${empTotal(name, 'celebration')}</td>
-                      <td className="py-2 text-right font-semibold text-orange-500">${empTotal(name)}</td>
+                      <td className="py-2.5 text-white">{name}</td>
+                      <td className="py-2.5 text-right text-gray-700 cosmic-num">${empTotal(name, 'lunch')}</td>
+                      <td className="py-2.5 text-right text-gray-700 cosmic-num">${empTotal(name, 'drinks')}</td>
+                      <td className="py-2.5 text-right text-gray-700 cosmic-num">${empTotal(name, 'celebration')}</td>
+                      <td className="py-2.5 text-right font-semibold text-white cosmic-num">${empTotal(name)}</td>
                     </tr>
                   ))}
-                  <tr className="font-bold text-gray-800">
+                  <tr className="font-bold text-white">
                     <td className="pt-3">合計</td>
-                    <td className="pt-3 text-right">${catTotal('lunch')}</td>
-                    <td className="pt-3 text-right">${catTotal('drinks')}</td>
-                    <td className="pt-3 text-right">${catTotal('celebration')}</td>
-                    <td className="pt-3 text-right text-orange-600">${grandTotal}</td>
+                    <td className="pt-3 text-right cosmic-num">${catTotal('lunch')}</td>
+                    <td className="pt-3 text-right cosmic-num">${catTotal('drinks')}</td>
+                    <td className="pt-3 text-right cosmic-num">${catTotal('celebration')}</td>
+                    <td className="pt-3 text-right cosmic-num cosmic-accent text-base">${grandTotal}</td>
                   </tr>
                 </tbody>
               </table>
@@ -273,22 +279,22 @@ export default function ReportPage() {
             return (
               <div key={key} className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <h2 className={`font-semibold ${accentText[key]}`}>{label} 明細</h2>
-                  <span className="text-sm text-gray-500">小計 ${total}</span>
+                  <h2 className={`text-lg font-bold ${accentText[key]}`}>{label} 明細</h2>
+                  <span className="text-sm text-gray-600">小計 <span className="cosmic-num text-white font-semibold">${total}</span></span>
                 </div>
                 {groups.length === 0 ? (
-                  <div className="bg-white rounded-xl border shadow-sm p-5 text-center text-gray-400 italic text-sm">本月無紀錄</div>
+                  <div className="glass-card p-5 text-center text-gray-400 italic text-sm">本月無紀錄</div>
                 ) : groups.map(({ date, items }) => {
                   const store = storeOf(date, key)
                   const dayTotal = items.reduce((s, o) => s + o.subtotal, 0)
                   return (
-                    <div key={date} className="bg-white rounded-xl border shadow-sm overflow-hidden">
-                      <div className="flex items-center justify-between px-5 py-3 bg-gray-50 border-b gap-2 flex-wrap">
+                    <div key={date} className="glass-card overflow-hidden">
+                      <div className="flex items-center justify-between px-5 py-3 cosmic-table-head gap-2 flex-wrap">
                         <div className="flex items-center gap-2 flex-wrap">
-                          <span className="font-semibold text-gray-700">{dateLabel(date)}</span>
-                          {store && <span className="text-xs bg-white border rounded-full px-2 py-0.5 text-gray-500">店家：{store}</span>}
+                          <span className="font-semibold text-white cosmic-num">{dateLabel(date)}</span>
+                          {store && <span className="cosmic-chip">店家：{store}</span>}
                         </div>
-                        <span className="text-orange-500 font-semibold">${dayTotal}</span>
+                        <span className="text-white font-semibold cosmic-num">${dayTotal}</span>
                       </div>
                       <OrderTable items={items} />
                     </div>
@@ -301,28 +307,28 @@ export default function ReportPage() {
           {/* 慶祝活動：依活動彙整（不分天） */}
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <h2 className="font-semibold text-rose-500">慶祝活動 明細（依活動彙整）</h2>
-              <span className="text-sm text-gray-500">小計 ${catTotal('celebration')}</span>
+              <h2 className="text-lg font-bold cat-celebration">慶祝活動 明細（依活動彙整）</h2>
+              <span className="text-sm text-gray-600">小計 <span className="cosmic-num text-white font-semibold">${catTotal('celebration')}</span></span>
             </div>
             {groupByEvent().length === 0 ? (
-              <div className="bg-white rounded-xl border shadow-sm p-5 text-center text-gray-400 italic text-sm">本月無紀錄</div>
+              <div className="glass-card p-5 text-center text-gray-400 italic text-sm">本月無紀錄</div>
             ) : groupByEvent().map(({ id, ev, items }) => {
               const evTotal = items.reduce((s, o) => s + o.subtotal, 0)
               return (
-                <div key={id} className="bg-white rounded-xl border shadow-sm overflow-hidden">
-                  <div className="flex items-center justify-between px-5 py-3 bg-rose-50 border-b gap-2 flex-wrap">
+                <div key={id} className="glass-card overflow-hidden">
+                  <div className="flex items-center justify-between px-5 py-3 cosmic-table-head gap-2 flex-wrap">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-semibold text-gray-800">{ev?.name ?? eventName(null)}</span>
+                      <span className="font-semibold text-white">{ev?.name ?? eventName(null)}</span>
                       {ev && (
-                        <span className="text-xs bg-white border rounded-full px-2 py-0.5 text-gray-500">
+                        <span className="cosmic-chip cosmic-num">
                           {ev.start_date} ～ {ev.end_date}
                         </span>
                       )}
                       {ev?.restaurant_name && (
-                        <span className="text-xs bg-white border rounded-full px-2 py-0.5 text-gray-500">店家：{ev.restaurant_name}</span>
+                        <span className="cosmic-chip">店家：{ev.restaurant_name}</span>
                       )}
                     </div>
-                    <span className="text-rose-500 font-semibold">${evTotal}</span>
+                    <span className="text-white font-semibold cosmic-num">${evTotal}</span>
                   </div>
                   <OrderTable items={items} />
                 </div>

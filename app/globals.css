@@ -1,5 +1,392 @@
 @import "tailwindcss";
 
-body {
-  font-family: -apple-system, 'Segoe UI', sans-serif;
+/* =========================================================
+   Cosmic UI skin for lunch-order
+   - Pure CSS, no JS libraries, no new npm packages.
+   - Import once (see HANDOFF.md step 3). Works alongside Tailwind v4.
+   - Theme per page: put data-theme="lunch" | "drinks" | "celebration" | "admin"
+     on the page root (OrderBoard root / admin root / report root).
+   ========================================================= */
+
+/* ---------- Tokens ---------- */
+:root {
+  --space-bg: #07081a;
+  --panel: rgba(20, 22, 52, 0.72);
+  --panel-deep: rgba(8, 9, 28, 0.7);
+  --line: rgba(180, 188, 255, 0.18);
+  --line-strong: rgba(180, 188, 255, 0.28);
+  --text: #eef0ff;
+  --text-strong: #ffffff;
+  --text-muted: #b7bceb;   /* labels */
+  --text-dim: #a9aeda;     /* secondary lines */
+  --text-faint: #8d93c4;   /* placeholders, zero values */
+  --on-accent: #1a1030;    /* text on bright accent buttons */
+
+  /* default = lunch (amber) */
+  --accent: #f5b86b;
+  --accent-2: #f08fb8;     /* gradient partner for primary button */
+  --accent-rgb: 245, 184, 107;
+  --b1: #ffe3b5; --b2: #f5b86b; --b3: #e8935e; --b4: #c46fb0; --b5: #9a4fd0;
+}
+[data-theme="drinks"] {
+  --accent: #6fe3e1; --accent-2: #8fa8ff; --accent-rgb: 111, 227, 225;
+  --on-accent: #0b1a2a;
+  --b1: #d6fbfa; --b2: #6fe3e1; --b3: #4fb6d8; --b4: #5b7be6; --b5: #3b5bd9;
+}
+[data-theme="celebration"] {
+  --accent: #f28bd8; --accent-2: #ffb86b; --accent-rgb: 242, 139, 216;
+  --b1: #ffd6f3; --b2: #f28bd8; --b3: #d86bc0; --b4: #9a6be6; --b5: #5b3bb0;
+}
+[data-theme="admin"] {
+  --accent: #afa8ff; --accent-2: #6fe3e1; --accent-rgb: 175, 168, 255;
+  --b1: #e4e1ff; --b2: #afa8ff; --b3: #8a82f0; --b4: #6fb6e3; --b5: #4b3fb0;
+}
+
+/* ---------- Starfield background ---------- */
+.cosmic-sky {
+  position: relative;
+  min-height: 100dvh;
+  color: var(--text);
+  background-color: var(--space-bg);
+  background-image:
+    radial-gradient(1.2px 1.2px at 23px 41px, #ffffff, transparent),
+    radial-gradient(1px 1px at 131px 87px, #cfd6ff, transparent),
+    radial-gradient(1.5px 1.5px at 77px 163px, #ffffff, transparent),
+    radial-gradient(1px 1px at 181px 17px, #ffe9c7, transparent),
+    radial-gradient(1px 1px at 9px 121px, #bfe9ff, transparent),
+    radial-gradient(1.3px 1.3px at 157px 191px, #ffffff, transparent),
+    radial-gradient(1px 1px at 101px 9px, #ffffff, transparent);
+  background-size: 200px 200px;
+  overflow-x: hidden;
+}
+/* soft nebula glows: add <div className="nebula nebula--a" aria-hidden /> etc. */
+.nebula { position: absolute; border-radius: 50%; pointer-events: none; z-index: 0; }
+.nebula--a { top: -120px; right: -140px; width: 380px; height: 380px;
+  background: radial-gradient(circle, rgba(var(--accent-rgb), 0.28) 0%, rgba(160, 90, 220, 0.14) 45%, transparent 70%); }
+.nebula--b { top: 620px; left: -160px; width: 360px; height: 360px;
+  background: radial-gradient(circle, rgba(110, 120, 255, 0.18) 0%, transparent 70%); }
+.cosmic-sky > *:not(.nebula) { position: relative; z-index: 1; }
+
+/* ---------- Panels ---------- */
+.glass-card {
+  border-radius: 22px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.03) inset, 0 12px 40px rgba(0, 0, 0, 0.45);
+}
+.glass-card--accent { border-color: rgba(var(--accent-rgb), 0.35); }
+
+.cosmic-field {
+  height: 48px; padding: 0 14px; border-radius: 14px;
+  border: 1px solid var(--line-strong);
+  background: var(--panel-deep); color: var(--text); font-size: 16px;
+}
+.cosmic-field::placeholder { color: var(--text-faint); }
+.cosmic-field:focus { outline: none; border-color: rgba(var(--accent-rgb), 0.8);
+  box-shadow: 0 0 0 3px rgba(var(--accent-rgb), 0.2); }
+
+.cosmic-btn-primary {
+  min-height: 52px; border-radius: 16px; border: none;
+  background: linear-gradient(100deg, var(--accent), var(--accent-2));
+  color: var(--on-accent); font-weight: 800; letter-spacing: 2px;
+  box-shadow: 0 0 24px rgba(var(--accent-rgb), 0.45);
+}
+.cosmic-btn-primary:disabled { opacity: 0.5; box-shadow: none; }
+
+.cosmic-num { font-family: var(--font-tech), "Noto Sans TC", sans-serif; font-variant-numeric: tabular-nums; }
+.cosmic-eyebrow { font-family: var(--font-tech), sans-serif; font-size: 12px; letter-spacing: 3px; color: var(--text-muted); }
+
+/* ---------- Planet (ring occlusion + self-rotation) ----------
+   Markup (size via --size, e.g. style={{'--size':'56px'}}):
+   <div className="planet" aria-hidden>
+     <div className="planet__tilt">
+       <div className="planet__ring" />
+       <div className="planet__body">
+         <div className="planet__surface" />
+         <div className="planet__shade" />
+       </div>
+       <div className="planet__ring planet__ring--front" />
+     </div>
+   </div>
+   Logic: back half of ring sits behind the body, front half is clipped to the lower
+   half and drawn on top. Cloud bands share the ring's tilt (equatorial plane) and
+   drift sideways under a FIXED light/shade layer = the planet reads as rotating. */
+.planet { --size: 56px; width: calc(var(--size) * 1.7); height: var(--size);
+  display: flex; align-items: center; justify-content: center; }
+.planet__tilt { position: relative; width: var(--size); height: var(--size); transform: rotate(-18deg); }
+.planet__ring {
+  position: absolute;
+  width: calc(var(--size) * 1.7); height: calc(var(--size) * 0.3);
+  left: calc(var(--size) * -0.35); top: calc(var(--size) * 0.35);
+  border-radius: 50%;
+  border: max(2px, calc(var(--size) / 28)) solid color-mix(in srgb, var(--b1) 70%, transparent);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--b1) 40%, transparent),
+              inset 0 0 6px color-mix(in srgb, var(--b1) 33%, transparent);
+  pointer-events: none;
+}
+.planet__ring--front { clip-path: inset(50% 0 0 0); }
+.planet__body {
+  position: absolute; inset: 0; border-radius: 50%; overflow: hidden;
+  box-shadow: 0 0 calc(var(--size) / 2) rgba(var(--accent-rgb), 0.5);
+}
+.planet__surface {
+  position: absolute; top: 0; left: 0; width: 200%; height: 100%;
+  background-image:
+    radial-gradient(ellipse 16% 9% at 30% 62%, color-mix(in srgb, var(--b5) 80%, transparent) 0%, transparent 100%),
+    radial-gradient(ellipse 10% 6% at 72% 34%, color-mix(in srgb, var(--b1) 73%, transparent) 0%, transparent 100%),
+    radial-gradient(ellipse 22% 5% at 55% 78%, color-mix(in srgb, var(--b4) 67%, transparent) 0%, transparent 100%),
+    radial-gradient(ellipse 8% 5% at 12% 26%, color-mix(in srgb, var(--b1) 60%, transparent) 0%, transparent 100%),
+    linear-gradient(180deg, var(--b1) 0%, var(--b2) 18%, var(--b3) 30%, var(--b2) 40%, var(--b4) 52%,
+                    var(--b2) 62%, var(--b3) 74%, var(--b4) 86%, var(--b5) 100%);
+  background-size: 50% 100%;
+  background-repeat: repeat-x;
+  animation: cosmic-drift 26s linear infinite;
+}
+.planet__shade {
+  position: absolute; inset: 0; border-radius: 50%;
+  background:
+    radial-gradient(circle at 30% 28%, rgba(255, 255, 255, 0.42) 0%, transparent 38%),
+    radial-gradient(circle at 42% 40%, transparent 50%, rgba(8, 4, 28, 0.72) 100%);
+}
+@keyframes cosmic-drift { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+
+/* ---------- Order-complete overlay ----------
+   Sequence (~2s): comet streaks in -> hits planet -> planet flashes + shockwave + 8 sparks
+   -> ring unfolds -> check mark draws -> title + order summary rise -> "好的" closes.
+   Mount the overlay fresh on each success so animations replay. */
+.done-overlay {
+  position: fixed; inset: 0; z-index: 50;
+  background: rgba(5, 6, 20, 0.84); backdrop-filter: blur(6px);
+  display: flex; align-items: center; justify-content: center;
+  animation: cosmic-ov-in 0.35s ease-out both;
+}
+.done-stage { position: relative; width: 240px; height: 240px; }
+.done-stage .planet { --size: 110px; position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); }
+.done-stage .planet__surface { animation-duration: 18s; }
+.done-stage .planet__body { animation: cosmic-planet-pop 0.7s cubic-bezier(.2,.9,.3,1.2) 0.95s both; }
+.done-stage .planet__ring { animation: cosmic-ring-in 0.6s cubic-bezier(.2,.9,.3,1.1) 1.25s both; }
+
+.done-comet { position: absolute; left: 50%; top: 50%; width: 12px; height: 12px; margin: -6px 0 0 -6px;
+  opacity: 0; animation: cosmic-comet 0.85s cubic-bezier(.55,0,.8,.4) 0.15s both; }
+.done-comet::before { content: ""; position: absolute; right: 4px; top: 5px; width: 120px; height: 2px;
+  background: linear-gradient(90deg, transparent, var(--b1)); transform-origin: right center; transform: rotate(50deg); }
+.done-comet::after { content: ""; position: absolute; inset: 0; border-radius: 50%; background: #fff;
+  box-shadow: 0 0 16px var(--b1), 0 0 32px var(--accent); }
+
+.done-shock { position: absolute; left: 50%; top: 50%; width: 110px; height: 110px; margin: -55px 0 0 -55px;
+  border-radius: 50%; border: 2px solid var(--b1); opacity: 0; animation: cosmic-shock 0.9s ease-out 1s both; }
+.done-spark { position: absolute; left: 50%; top: 50%; width: 6px; height: 6px; margin: -3px 0 0 -3px;
+  border-radius: 50%; background: var(--b1); box-shadow: 0 0 10px var(--accent);
+  opacity: 0; animation: cosmic-burst 0.9s ease-out 1s both; }
+/* 8 sparks: set --dx/--dy inline, e.g. (90,-40) (70,60) (-80,50) (-95,-30) (10,-100) (-20,95) (110,15) (-60,-85) px */
+
+.done-check-wrap { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  transform: rotate(18deg); /* cancels planet tilt */ }
+.done-check { stroke-dasharray: 40; stroke-dashoffset: 0; animation: cosmic-draw 0.45s ease-out 1.35s both; }
+.done-rise-1 { animation: cosmic-rise 0.5s ease-out 1.5s both; }
+.done-rise-2 { animation: cosmic-rise 0.5s ease-out 1.7s both; }
+
+@keyframes cosmic-ov-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes cosmic-comet { 0% { transform: translate(-190px, -230px); opacity: 0; } 15% { opacity: 1; }
+  85% { opacity: 1; } 100% { transform: translate(0, 0); opacity: 0; } }
+@keyframes cosmic-planet-pop {
+  0% { transform: scale(.55); opacity: .35; }
+  55% { transform: scale(1.12); opacity: 1; box-shadow: 0 0 80px rgba(var(--accent-rgb), .9); }
+  100% { transform: scale(1); opacity: 1; box-shadow: 0 0 44px rgba(var(--accent-rgb), .55); } }
+@keyframes cosmic-ring-in { from { transform: scaleX(.2); opacity: 0; } to { transform: scaleX(1); opacity: 1; } }
+@keyframes cosmic-shock { 0% { transform: scale(.4); opacity: .9; } 100% { transform: scale(2.4); opacity: 0; } }
+@keyframes cosmic-burst { 0% { transform: translate(0, 0) scale(1); opacity: 1; }
+  100% { transform: translate(var(--dx), var(--dy)) scale(.2); opacity: 0; } }
+@keyframes cosmic-draw { from { stroke-dashoffset: 40; } to { stroke-dashoffset: 0; } }
+@keyframes cosmic-rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: translateY(0); } }
+
+/* ---------- Accessibility: reduced motion shows final states, no movement ---------- */
+@media (prefers-reduced-motion: reduce) {
+  .planet__surface, .done-overlay, .done-stage .planet__body, .done-stage .planet__ring,
+  .done-comet, .done-shock, .done-spark, .done-check, .done-rise-1, .done-rise-2 { animation: none; }
+}
+
+/* =========================================================
+   Project glue (added on top of cosmic.css)
+   ========================================================= */
+
+html, body { background-color: var(--space-bg); }
+body { font-family: var(--font-body), "Noto Sans TC", -apple-system, "Segoe UI", sans-serif; }
+
+.cosmic-sky {
+  color-scheme: dark; /* native date pickers, scrollbars, file inputs */
+  /* clip (not hidden): hidden turns the sky into a scroll box that tapping can nudge sideways */
+  overflow-x: clip;
+
+  /* Existing pages use Tailwind's gray scale for neutral text and chrome.
+     Inside the sky we invert it so those classes read correctly on dark glass. */
+  --color-gray-50: rgba(255, 255, 255, 0.04);
+  --color-gray-100: rgba(255, 255, 255, 0.07);
+  --color-gray-200: rgba(255, 255, 255, 0.13);
+  --color-gray-300: #6c72a6;
+  --color-gray-400: var(--text-faint);
+  --color-gray-500: var(--text-dim);
+  --color-gray-600: var(--text-muted);
+  --color-gray-700: #dfe2ff;
+  --color-gray-800: var(--text-strong);
+  --color-red-300: #ff9aae;
+  --color-red-400: #ff8da3;
+  --color-red-500: #ff7b95;
+  --color-red-600: #ff6685;
+  --color-green-600: #7fe3b2;
+  --color-blue-500: #9ec8ff;
+}
+.cosmic-sky option { background: #14163a; color: var(--text); }
+
+/* Tailwind v4 borders default to currentColor; keep bare `border` lines subtle */
+@layer base {
+  .cosmic-sky :where(*, ::before, ::after) { border-color: var(--line); }
+}
+
+/* Unlayered like cosmic.css so modifiers can override it; avoid mixing with conflicting Tailwind utilities */
+  /* ---------- Top navigation ---------- */
+  .cosmic-nav {
+    background: rgba(7, 8, 26, 0.72);
+    border-bottom: 1px solid var(--line);
+    backdrop-filter: blur(10px);
+  }
+  .cosmic-brand { font-family: var(--font-tech), sans-serif; letter-spacing: 2px; color: var(--accent); }
+  .cosmic-navlink {
+    display: inline-flex; align-items: center; min-height: 40px; padding: 0 14px;
+    border-radius: 999px; color: #c9cdf2; font-weight: 500; transition: background-color .2s, color .2s;
+  }
+  .cosmic-navlink:hover { color: var(--text-strong); background: rgba(255, 255, 255, 0.06); }
+  .cosmic-navlink[aria-current="page"] {
+    background: var(--accent); color: var(--on-accent); font-weight: 700;
+    box-shadow: 0 0 18px rgba(var(--accent-rgb), 0.5);
+  }
+
+  /* ---------- Segmented tabs (今日/明日, admin tabs) ---------- */
+  .cosmic-tab {
+    min-height: 44px; padding: 0 16px; border-radius: 14px;
+    border: 1px solid var(--line-strong); background: rgba(255, 255, 255, 0.04);
+    color: #c9cdf2; font-weight: 600; transition: background-color .2s, color .2s;
+  }
+  .cosmic-tab:hover { background: rgba(255, 255, 255, 0.08); color: var(--text-strong); }
+  .cosmic-tab--on, .cosmic-tab--on:hover {
+    background: var(--accent); border-color: transparent; color: var(--on-accent);
+    box-shadow: 0 0 18px rgba(var(--accent-rgb), 0.45);
+  }
+
+  /* ---------- Buttons & fields ---------- */
+  .cosmic-btn-primary { padding: 0 22px; cursor: pointer; transition: filter .2s; }
+  .cosmic-btn-primary:hover:not(:disabled) { filter: brightness(1.08); }
+  .cosmic-btn-primary:disabled { cursor: not-allowed; }
+  .cosmic-btn-primary--sm { min-height: 48px; border-radius: 14px; letter-spacing: 1px; padding: 0 16px; }
+  .cosmic-btn-ghost {
+    min-height: 44px; padding: 0 14px; border-radius: 14px;
+    border: 1px solid var(--line-strong); background: rgba(255, 255, 255, 0.05);
+    color: var(--text); font-weight: 500; transition: background-color .2s;
+  }
+  .cosmic-btn-ghost:hover { background: rgba(255, 255, 255, 0.1); }
+  .cosmic-btn-ok {
+    min-height: 44px; padding: 0 16px; border-radius: 14px; border: 1px solid rgba(127, 227, 178, 0.5);
+    background: rgba(127, 227, 178, 0.14); color: #a8f0cc; font-weight: 700;
+  }
+  .cosmic-btn-ok:hover { background: rgba(127, 227, 178, 0.22); }
+  .cosmic-field { width: 100%; font-family: inherit; }
+  .cosmic-field--sm { height: 44px; padding: 0 10px; border-radius: 12px; }
+  .cosmic-field:disabled { opacity: 0.55; }
+  .cosmic-file { font-size: 14px; color: var(--text-muted); }
+  .cosmic-file::file-selector-button {
+    margin-right: 12px; min-height: 40px; padding: 0 14px; border-radius: 12px;
+    border: 1px solid var(--line-strong); background: rgba(255, 255, 255, 0.08);
+    color: var(--text); font-weight: 600; cursor: pointer;
+  }
+  .cosmic-del {
+    display: inline-flex; align-items: center; justify-content: center;
+    min-width: 32px; min-height: 44px; color: #ff9aae; font-size: 20px; line-height: 1;
+  }
+  .cosmic-del:hover { color: #ff6685; }
+
+  /* ---------- Text & accents ---------- */
+  .cosmic-accent { color: var(--accent); }
+  .cosmic-link { color: var(--accent); font-weight: 600; }
+  .cosmic-link:hover { filter: brightness(1.15); }
+  .cosmic-label { font-size: 13px; color: var(--text-muted); }
+  .cosmic-title { color: var(--text-strong); font-weight: 900; letter-spacing: 1px; }
+  .cosmic-ok { color: #7fe3b2; }
+  .cosmic-err { color: #ff8da3; }
+  .cosmic-memo { color: #9ec8ff; }
+  .cat-lunch, .cosmic-table .cat-lunch { color: #f5b86b; }
+  .cat-drinks, .cosmic-table .cat-drinks { color: #6fe3e1; }
+  .cat-celebration, .cosmic-table .cat-celebration { color: #f28bd8; }
+
+  /* ---------- Soft accent boxes, chips, avatars ---------- */
+  .cosmic-soft {
+    border-radius: 16px; border: 1px solid rgba(var(--accent-rgb), 0.35);
+    background: rgba(var(--accent-rgb), 0.08);
+  }
+  .cosmic-inset {
+    border-radius: 16px; border: 1px solid var(--line); background: var(--panel-deep);
+  }
+  .cosmic-chip {
+    display: inline-flex; align-items: center; padding: 2px 10px; border-radius: 999px;
+    border: 1px solid var(--line-strong); background: rgba(255, 255, 255, 0.05);
+    font-size: 12px; color: var(--text-muted);
+  }
+  .cosmic-chip--on {
+    background: var(--accent); border-color: transparent; color: var(--on-accent); font-weight: 700;
+  }
+  .cosmic-chip--wait { border-color: rgba(245, 184, 107, 0.5); background: rgba(245, 184, 107, 0.12); color: #ffd39a; }
+  .cosmic-avatar {
+    flex: none; display: inline-flex; align-items: center; justify-content: center;
+    width: 36px; height: 36px; border-radius: 50%; font-size: 13px; font-weight: 700;
+    color: var(--accent); background: rgba(var(--accent-rgb), 0.16); border: 1px solid rgba(var(--accent-rgb), 0.5);
+  }
+
+  /* ---------- Tables ---------- */
+  .cosmic-table th { color: var(--text-muted); font-weight: 500; }
+  .cosmic-table thead tr { border-bottom: 1px solid var(--line-strong); }
+  .cosmic-table tbody tr { border-color: rgba(180, 188, 255, 0.12); }
+  .cosmic-table-head { background: rgba(var(--accent-rgb), 0.08); border-bottom: 1px solid var(--line); }
+
+/* ---------- Order-complete extras: warp jump + glowing title ----------
+   Impact at 1.0s: a flash + light streaks shoot out of the planet (warp speed) and the
+   nebula behind it lights up. Title letters then ignite one by one. Total stays ~2s. */
+.done-nebula {
+  position: absolute; left: 50%; top: 50%; width: 760px; height: 760px; margin: -380px 0 0 -380px;
+  border-radius: 50%; pointer-events: none;
+  background: radial-gradient(circle, rgba(var(--accent-rgb), 0.3) 0%, rgba(150, 90, 230, 0.14) 38%, transparent 68%);
+  animation: cosmic-nebula-up 1.2s ease-out 0.95s both;
+}
+.done-flash {
+  position: absolute; left: 50%; top: 50%; width: 110px; height: 110px; margin: -55px 0 0 -55px;
+  border-radius: 50%; pointer-events: none; opacity: 0;
+  background: radial-gradient(circle, #ffffff 0%, var(--b1) 30%, rgba(var(--accent-rgb), 0.5) 55%, transparent 72%);
+  animation: cosmic-flash 0.7s ease-out 1s both;
+}
+.done-overlay { overflow: hidden; } /* streaks and nebula fly past the screen edges */
+.done-warp { position: absolute; left: 50%; top: 50%; width: 0; height: 0; pointer-events: none; }
+.done-streak {
+  position: absolute; left: 0; top: -1px; width: var(--len); height: 2px; border-radius: 3px;
+  transform-origin: 0 50%; opacity: 0;
+  background: linear-gradient(90deg, transparent, var(--b1) 55%, #ffffff);
+  box-shadow: 0 0 6px rgba(var(--accent-rgb), 0.7);
+  animation: cosmic-warp 0.75s cubic-bezier(0.25, 0.6, 0.3, 1) calc(1s + var(--d)) both;
+}
+.done-title-char {
+  display: inline-block;
+  text-shadow: 0 0 14px rgba(var(--accent-rgb), 0.55);
+  animation: cosmic-ignite 0.45s ease-out calc(1.45s + var(--i) * 0.07s) both;
+}
+@keyframes cosmic-nebula-up { 0% { opacity: 0; transform: scale(0.6); } 35% { opacity: 1; transform: scale(1.08); }
+  100% { opacity: 0.75; transform: scale(1); } }
+@keyframes cosmic-flash { 0% { opacity: 0.95; transform: scale(0.6); } 100% { opacity: 0; transform: scale(5); } }
+@keyframes cosmic-warp {
+  0% { opacity: 0; transform: rotate(var(--a)) translateX(40px) scaleX(0.15); }
+  25% { opacity: 1; }
+  100% { opacity: 0; transform: rotate(var(--a)) translateX(var(--far)) scaleX(1); } }
+@keyframes cosmic-ignite {
+  0% { opacity: 0; transform: translateY(10px) scale(0.7); filter: blur(6px); text-shadow: 0 0 30px rgba(var(--accent-rgb), 1); }
+  60% { opacity: 1; transform: translateY(0) scale(1.12); filter: blur(0); }
+  100% { opacity: 1; transform: none; text-shadow: 0 0 14px rgba(var(--accent-rgb), 0.55); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .done-nebula, .done-flash, .done-streak, .done-title-char { animation: none; }
 }

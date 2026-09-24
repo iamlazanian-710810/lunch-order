@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useState, useCallback } from 'react'
 import { supabase, type Employee, type DailyCategory } from '@/lib/supabase'
 import { todayStr, tomorrowStr, dateLabel, type DayKey } from '@/lib/date'
+import Planet from './Planet'
+import OrderDoneOverlay from './OrderDoneOverlay'
 
 type OrderRow = { item_name: string; price: string; note: string }
 type PeerOrder = { employee_name: string; items: { id: string; name: string; price: number; note: string }[]; total: number }
@@ -10,7 +12,6 @@ type PeerOrder = { employee_name: string; items: { id: string; name: string; pri
 export default function OrderBoard({
   category,
   title,
-  accent = 'orange',
 }: {
   category: DailyCategory
   title: string
@@ -30,12 +31,8 @@ export default function OrderBoard({
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState('')
   const [lightbox, setLightbox] = useState(false)
-
-  // 主題色（午餐橘、飲料天藍）
-  const c = {
-    orange: { ring: 'focus:ring-orange-400', text: 'text-orange-500', text2: 'text-orange-400', text3: 'text-orange-600', btn: 'bg-orange-500 hover:bg-orange-600', link: 'text-orange-500 hover:text-orange-700', tab: 'bg-orange-500', border: 'border-orange-200', soft: 'bg-orange-50' },
-    sky: { ring: 'focus:ring-sky-400', text: 'text-sky-500', text2: 'text-sky-400', text3: 'text-sky-600', btn: 'bg-sky-500 hover:bg-sky-600', link: 'text-sky-500 hover:text-sky-700', tab: 'bg-sky-500', border: 'border-sky-200', soft: 'bg-sky-50' },
-  }[accent]
+  // 完成動畫（純 UI）：送出成功才設值，按「好的」清空
+  const [doneInfo, setDoneInfo] = useState<{ item: string; price: number } | null>(null)
 
   const loadEmployees = useCallback(async () => {
     const { data } = await supabase.from('employees').select('*').order('name')
@@ -151,7 +148,10 @@ export default function OrderBoard({
     const { error } = await supabase.from('orders').insert(insertRows)
     setSaving(false)
     if (error) return setMessage('儲存失敗：' + error.message)
-    setMessage('已送出！（' + dayWord + '）')
+    setDoneInfo({
+      item: valid.map(r => r.item_name.trim()).join('、'),
+      price: valid.reduce((sum, r) => sum + parseInt(r.price), 0),
+    })
     loadOrders()
   }
 
@@ -161,32 +161,32 @@ export default function OrderBoard({
     loadMyOrders(selectedEmployee)
   }
 
-  const dayTabClass = (k: DayKey) =>
-    `flex-1 px-4 py-2.5 rounded-lg text-sm font-semibold transition-colors ${
-      day === k ? `${c.tab} text-white shadow-sm` : 'bg-white text-gray-500 hover:bg-gray-50 border'
-    }`
+  const dayTabClass = (k: DayKey) => `cosmic-tab flex-1 text-sm flex flex-col sm:flex-row items-center justify-center sm:gap-1.5 py-1.5 leading-snug ${day === k ? 'cosmic-tab--on' : ''}`
 
   const myName = employees.find(e => e.id === selectedEmployee)?.name
 
   return (
-    <div className="space-y-5">
-      <div className="bg-white rounded-xl shadow-sm p-5 border">
-        <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
-          <h1 className="text-xl font-bold text-gray-800">{title}</h1>
-          <span className={`text-sm font-medium ${c.text}`}>{dateLabel(date)}</span>
+    <div className="space-y-5" data-theme={category}>
+      <div className="glass-card glass-card--accent p-5">
+        <div className="flex items-start justify-between mb-4 gap-2">
+          <div className="flex flex-col gap-1.5">
+            <span className="cosmic-eyebrow">ORDER DECK · <span className="cosmic-num">{dateLabel(date)}</span></span>
+            <h1 className="cosmic-title text-2xl sm:text-3xl">{title}</h1>
+          </div>
+          <Planet className="shrink-0" />
         </div>
         {/* 今日 / 明日 切換 */}
         <div className="flex gap-2">
           <button className={dayTabClass('today')} onClick={() => setDay('today')}>
-            今日 · {dateLabel(dates.today)}
+            <span>今日</span><span className="hidden sm:inline">·</span><span className="cosmic-num">{dateLabel(dates.today)}</span>
           </button>
           <button className={dayTabClass('tomorrow')} onClick={() => setDay('tomorrow')}>
-            明日預訂 · {dateLabel(dates.tomorrow)}
+            <span>明日預訂</span><span className="hidden sm:inline">·</span><span className="cosmic-num">{dateLabel(dates.tomorrow)}</span>
           </button>
         </div>
         {day === 'tomorrow' && (
-          <p className={`mt-3 text-xs text-gray-500 ${c.soft} border ${c.border} rounded-lg px-3 py-2`}>
-            這是<span className="font-semibold">明天（{dateLabel(dates.tomorrow)}）</span>的預訂，和今天的訂單完全分開計算。到了明天，這筆會自動變成「今日」的訂單。
+          <p className="cosmic-soft mt-3 text-xs text-gray-600 px-3 py-2">
+            這是<span className="font-semibold text-white">明天（{dateLabel(dates.tomorrow)}）</span>的預訂，和今天的訂單完全分開計算。到了明天，這筆會自動變成「今日」的訂單。
           </p>
         )}
       </div>
@@ -195,35 +195,41 @@ export default function OrderBoard({
         <div className="space-y-4">
           {/* 本日店家 + 菜單圖片 */}
           {(menuImage || storeName) ? (
-            <div className="bg-white rounded-xl shadow-sm border p-3">
-              <div className="flex items-center justify-between mb-2">
-                <p className="text-sm font-medium text-gray-600">
-                  {dayWord}店家：
-                  {storeName ? <span className={`font-semibold ${c.text}`}>{storeName}</span> : <span className="text-gray-400">未填寫</span>}
-                </p>
-                {menuImage && <span className="text-xs text-gray-400">點圖放大</span>}
+            <div className="glass-card glass-card--accent p-4">
+              <div className="flex items-center justify-between mb-3 gap-2">
+                <div className="flex flex-col gap-1">
+                  <span className="cosmic-eyebrow cosmic-accent" style={{ fontSize: 11 }}>
+                    {day === 'today' ? "TODAY'S STATION" : "TOMORROW'S STATION"}
+                  </span>
+                  <p className="text-sm text-gray-600">
+                    {dayWord}店家：
+                    {storeName ? <span className="text-lg font-bold text-white">{storeName}</span> : <span className="text-gray-400">未填寫</span>}
+                  </p>
+                </div>
+                {menuImage && <span className="text-xs text-gray-400 shrink-0">點圖放大</span>}
               </div>
               {menuImage && (
                 <img
                   src={menuImage}
                   alt="菜單"
-                  className="w-full rounded-lg object-contain max-h-80 cursor-zoom-in"
+                  className="w-full rounded-2xl object-contain max-h-80 cursor-zoom-in border"
                   onClick={() => setLightbox(true)}
                 />
               )}
             </div>
           ) : (
-            <div className="bg-white rounded-xl shadow-sm border p-5 text-center text-gray-400 italic text-sm">
+            <div className="glass-card p-5 text-center text-gray-400 italic text-sm">
               管理員尚未設定{dayWord}的店家與菜單
             </div>
           )}
 
           {/* 點餐表單 */}
-          <div className="bg-white rounded-xl shadow-sm p-5 border space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">我是</label>
+          <div className="glass-card p-5 space-y-4">
+            <h2 className="text-lg font-bold text-white">我要點餐</h2>
+            <div className="flex flex-col gap-1.5">
+              <label className="cosmic-label">我是</label>
               <select
-                className={`w-full border rounded-lg px-3 py-2 text-gray-800 focus:outline-none focus:ring-2 ${c.ring}`}
+                className="cosmic-field"
                 value={selectedEmployee}
                 onChange={e => handleEmployeeChange(e.target.value)}
               >
@@ -233,58 +239,58 @@ export default function OrderBoard({
             </div>
 
             <div>
-              <p className="text-sm font-medium text-gray-700 mb-2">
+              <p className="cosmic-label mb-2">
                 點餐內容
-                <span className="ml-2 text-xs font-normal text-gray-400">
+                <span className="ml-2 text-xs text-gray-400">
                   （{dayWord} {dateLabel(date)}）
                 </span>
               </p>
               <div className="space-y-2">
-                <div className="grid grid-cols-12 gap-1 text-xs text-gray-400 px-1">
+                <div className="grid grid-cols-12 gap-1.5 text-xs text-gray-400 px-1">
                   <span className="col-span-5">餐點名稱</span>
                   <span className="col-span-3">價格</span>
                   <span className="col-span-3">備註</span>
                 </div>
                 {rows.map((row, i) => (
-                  <div key={i} className="grid grid-cols-12 gap-1 items-center">
+                  <div key={i} className="grid grid-cols-12 gap-1.5 items-center">
                     <input
-                      className={`col-span-5 border rounded-lg px-2 py-1.5 text-sm text-gray-800 focus:outline-none focus:ring-2 ${c.ring}`}
+                      className="cosmic-field cosmic-field--sm col-span-5"
                       placeholder="例：排骨飯"
                       value={row.item_name}
                       onChange={e => updateRow(i, 'item_name', e.target.value)}
                     />
                     <input
-                      className={`col-span-3 border rounded-lg px-2 py-1.5 text-sm text-gray-800 focus:outline-none focus:ring-2 ${c.ring}`}
+                      className="cosmic-field cosmic-field--sm cosmic-num col-span-3"
                       placeholder="120"
                       type="number"
                       value={row.price}
                       onChange={e => updateRow(i, 'price', e.target.value)}
                     />
                     <input
-                      className={`col-span-3 border rounded-lg px-2 py-1.5 text-sm text-gray-800 focus:outline-none focus:ring-2 ${c.ring}`}
+                      className="cosmic-field cosmic-field--sm col-span-3"
                       placeholder="不辣"
                       value={row.note}
                       onChange={e => updateRow(i, 'note', e.target.value)}
                     />
-                    <button onClick={() => removeRow(i)}
-                      className="col-span-1 text-red-300 hover:text-red-500 text-lg leading-none text-center">×</button>
+                    <button onClick={() => removeRow(i)} aria-label="刪除這一筆"
+                      className="cosmic-del col-span-1">×</button>
                   </div>
                 ))}
               </div>
-              <button onClick={addRow} className={`mt-2 text-sm font-medium ${c.link}`}>＋ 新增一筆</button>
+              <button onClick={addRow} className="cosmic-link mt-2 text-sm min-h-11">＋ 新增一筆</button>
             </div>
 
-            <div className="flex items-center justify-between pt-1">
-              <span className="font-semibold text-gray-700">
-                小計：<span className={c.text}>${total}</span>
+            <div className="flex items-center justify-between gap-3 pt-1 flex-wrap">
+              <span className="font-semibold text-gray-600">
+                小計：<span className="cosmic-num text-xl font-bold text-white">${total}</span>
               </span>
               <button onClick={handleSave} disabled={saving}
-                className={`${c.btn} text-white px-5 py-2 rounded-lg font-medium disabled:opacity-50`}>
+                className="cosmic-btn-primary text-base">
                 {saving ? '儲存中…' : `確認送出（${dayWord}）`}
               </button>
             </div>
             {message && (
-              <p className={`text-sm text-center ${message.startsWith('儲存失敗') ? 'text-red-500' : 'text-green-600'}`}>
+              <p className="text-sm text-center cosmic-err">
                 {message}
               </p>
             )}
@@ -292,43 +298,51 @@ export default function OrderBoard({
         </div>
 
         {/* 訂單統計 */}
-        <div className="bg-white rounded-xl shadow-sm p-5 border">
-          <h2 className="font-semibold text-gray-700 mb-3">
-            {dayWord}訂單統計
-            <span className="ml-2 text-xs font-normal text-gray-400">{dateLabel(date)}</span>
-          </h2>
+        <div className="glass-card p-5 self-start">
+          <div className="flex items-baseline justify-between gap-2 mb-2">
+            <h2 className="text-lg font-bold text-white">
+              {dayWord}訂單統計
+              <span className="ml-2 text-xs font-normal text-gray-400 cosmic-num">{dateLabel(date)}</span>
+            </h2>
+            {peerOrders.length > 0 && (
+              <span className="cosmic-num cosmic-accent text-sm shrink-0">{peerOrders.length} 人</span>
+            )}
+          </div>
           {peerOrders.length === 0 ? (
-            <p className="text-gray-400 text-sm italic">
+            <p className="text-gray-400 text-sm italic py-2">
               {day === 'today' ? '還沒有人點餐' : '還沒有人預訂明天'}
             </p>
           ) : (
-            <div className="space-y-3">
+            <div>
               {peerOrders.map(p => (
-                <div key={p.employee_name} className="border-b pb-2 last:border-0">
-                  <div className="flex justify-between text-sm font-medium text-gray-800 mb-0.5">
-                    <span>{p.employee_name}</span>
-                    <span className={c.text}>${p.total}</span>
-                  </div>
-                  {p.items.map((item, idx) => (
-                    <div key={idx} className="ml-2 mt-1">
-                      <div className="text-xs text-gray-600 flex justify-between items-start gap-1">
-                        <span className="flex-1">{item.name}</span>
-                        <div className="flex items-center gap-1.5">
-                          <span className={c.text2}>${item.price}</span>
-                          {myName && p.employee_name === myName && (
-                            <button onClick={() => deleteMyOrder(item.id)}
-                              className="text-red-300 hover:text-red-500 text-base leading-none">×</button>
-                          )}
-                        </div>
-                      </div>
-                      {item.note && <div className="text-xs text-blue-500 mt-0.5">備註：{item.note}</div>}
+                <div key={p.employee_name} className="flex gap-3 py-3 border-b">
+                  <span className="cosmic-avatar">{(p.employee_name.split('-').pop() || p.employee_name).slice(0, 1)}</span>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex justify-between gap-2 text-[15px] font-medium text-white">
+                      <span>{p.employee_name}</span>
+                      <span className="cosmic-num font-semibold">${p.total}</span>
                     </div>
-                  ))}
+                    {p.items.map((item, idx) => (
+                      <div key={idx} className="mt-0.5">
+                        <div className="text-sm text-gray-600 flex justify-between items-center gap-1">
+                          <span className="flex-1">{item.name}</span>
+                          <div className="flex items-center gap-1">
+                            <span className="cosmic-num text-gray-600">${item.price}</span>
+                            {myName && p.employee_name === myName && (
+                              <button onClick={() => deleteMyOrder(item.id)} aria-label={`刪除 ${item.name}`}
+                                className="cosmic-del">×</button>
+                            )}
+                          </div>
+                        </div>
+                        {item.note && <div className="text-xs cosmic-memo">備註：{item.note}</div>}
+                      </div>
+                    ))}
+                  </div>
                 </div>
               ))}
-              <div className="flex justify-between font-bold text-gray-800 pt-1">
+              <div className="flex justify-between items-baseline font-bold text-white pt-3">
                 <span>{dayWord}總計</span>
-                <span className={c.text3}>${peerOrders.reduce((s, p) => s + p.total, 0)}</span>
+                <span className="cosmic-num text-xl cosmic-accent">${peerOrders.reduce((s, p) => s + p.total, 0)}</span>
               </div>
             </div>
           )}
@@ -337,12 +351,17 @@ export default function OrderBoard({
 
       {/* Lightbox */}
       {lightbox && menuImage && (
-        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4"
+        <div className="fixed inset-0 z-50 bg-black/85 flex items-center justify-center p-4"
           onClick={() => setLightbox(false)}>
           <img src={menuImage} alt="菜單" className="max-w-full max-h-full rounded-lg object-contain" />
-          <button className="absolute top-4 right-4 text-white text-3xl leading-none hover:text-gray-300"
+          <button className="absolute top-4 right-4 text-white text-3xl leading-none hover:text-gray-300 min-w-11 min-h-11"
             onClick={() => setLightbox(false)}>×</button>
         </div>
+      )}
+
+      {/* 送出成功的完成動畫 */}
+      {doneInfo && (
+        <OrderDoneOverlay item={doneInfo.item} price={doneInfo.price} onClose={() => setDoneInfo(null)} />
       )}
     </div>
   )

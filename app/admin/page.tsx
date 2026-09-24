@@ -7,6 +7,7 @@ import {
 } from '@/lib/supabase'
 import { todayStr, tomorrowStr, dateLabel, type DayKey } from '@/lib/date'
 import { StarDisplay } from '../components/Stars'
+import Planet from '../components/Planet'
 
 const ADMIN_PIN = process.env.NEXT_PUBLIC_ADMIN_PIN || '1234'
 
@@ -347,45 +348,47 @@ export default function AdminPage() {
     flash('已複製到剪貼簿！')
   }
 
-  const tabClass = (t: string) =>
-    `px-4 py-2 rounded-lg font-medium text-sm transition-colors ${tab === t ? 'bg-orange-500 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`
-  const slotBtnClass = (k: SlotKey) =>
-    `px-3 py-1.5 text-sm rounded-lg font-medium ${orderSlot === k ? 'bg-orange-500 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`
-  const dayBtnClass = (d: DayKey) =>
-    `flex-1 px-4 py-2 rounded-lg text-sm font-semibold ${settingDay === d ? 'bg-orange-500 text-white' : 'bg-white border text-gray-500 hover:bg-gray-50'}`
+  const tabClass = (t: string) => `cosmic-tab text-sm ${tab === t ? 'cosmic-tab--on' : ''}`
+  const slotBtnClass = (k: SlotKey) => `cosmic-tab text-sm ${orderSlot === k ? 'cosmic-tab--on' : ''}`
+  const dayBtnClass = (d: DayKey) => `cosmic-tab flex-1 text-sm flex flex-col sm:flex-row items-center justify-center sm:gap-1.5 py-1.5 leading-snug ${settingDay === d ? 'cosmic-tab--on' : ''}`
 
   // PIN 驗證畫面
   if (!verified) {
     return (
-      <div className="min-h-[60vh] flex items-center justify-center">
-        <div className="bg-white rounded-2xl shadow-sm border p-8 w-full max-w-xs space-y-4">
-          <h2 className="text-lg font-bold text-gray-800 text-center">管理員驗證</h2>
+      <div className="min-h-[60vh] flex items-center justify-center" data-theme="admin">
+        <div className="glass-card glass-card--accent p-8 w-full max-w-xs space-y-4">
+          <div className="flex justify-center"><Planet /></div>
+          <h2 className="cosmic-title text-xl text-center">管理員驗證</h2>
           <p className="text-sm text-gray-500 text-center">請輸入管理員 PIN 碼</p>
           <input
             type="password" inputMode="numeric" placeholder="PIN 碼"
             value={pinInput}
             onChange={e => setPinInput(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && submitPin()}
-            className={`w-full border rounded-lg px-4 py-3 text-center text-xl tracking-widest focus:outline-none focus:ring-2 ${pinError ? 'border-red-400 ring-red-300' : 'focus:ring-orange-400'}`}
+            className={`cosmic-field cosmic-num text-center text-xl tracking-widest ${pinError ? 'border-red-400!' : ''}`}
             autoFocus
           />
           {pinError && <p className="text-red-500 text-sm text-center">PIN 碼錯誤，請重試</p>}
           <button onClick={submitPin}
-            className="w-full bg-orange-500 hover:bg-orange-600 text-white py-2.5 rounded-lg font-medium">確認進入</button>
+            className="cosmic-btn-primary w-full">確認進入</button>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="space-y-5">
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-bold text-gray-800">管理後台</h1>
-        <div className="flex items-center gap-3">
-          {msg && <span className="text-sm text-green-600 bg-green-50 px-3 py-1 rounded-full">{msg}</span>}
-          <button onClick={() => { sessionStorage.removeItem('admin_verified'); setVerified(false) }}
-            className="text-xs text-gray-400 hover:text-gray-600">登出</button>
+    <div className="space-y-5" data-theme="admin">
+      <div className="glass-card glass-card--accent p-5 flex items-start justify-between gap-3">
+        <div className="flex flex-col gap-1.5">
+          <span className="cosmic-eyebrow">MISSION CONTROL</span>
+          <h1 className="cosmic-title text-2xl sm:text-3xl">管理後台</h1>
+          <div className="flex items-center gap-3 flex-wrap">
+            <button onClick={() => { sessionStorage.removeItem('admin_verified'); setVerified(false) }}
+              className="text-xs text-gray-400 hover:text-gray-600 min-h-11">登出</button>
+            {msg && <span className="text-sm cosmic-ok px-3 py-1 rounded-full border bg-gray-50">{msg}</span>}
+          </div>
         </div>
+        <Planet className="shrink-0" />
       </div>
 
       <div className="flex gap-2 flex-wrap">
@@ -398,14 +401,14 @@ export default function AdminPage() {
       {/* ===== 今日／明日設定 ===== */}
       {tab === 'daily' && (
         <div className="space-y-4">
-          <div className="bg-white rounded-xl border shadow-sm p-5">
-            <h2 className="font-semibold text-gray-700 mb-3">📋 設定店家與菜單</h2>
+          <div className="glass-card p-5">
+            <h2 className="text-lg font-bold text-white mb-3">📋 設定店家與菜單</h2>
             <div className="flex gap-2 mb-4">
               <button className={dayBtnClass('today')} onClick={() => setSettingDay('today')}>
-                今日 · {dateLabel(dates.today)}
+                <span>今日</span><span className="hidden sm:inline">·</span><span className="cosmic-num">{dateLabel(dates.today)}</span>
               </button>
               <button className={dayBtnClass('tomorrow')} onClick={() => setSettingDay('tomorrow')}>
-                明日 · {dateLabel(dates.tomorrow)}
+                <span>明日</span><span className="hidden sm:inline">·</span><span className="cosmic-num">{dateLabel(dates.tomorrow)}</span>
               </button>
             </div>
             <div className="space-y-5">
@@ -413,8 +416,8 @@ export default function AdminPage() {
                 const sk = `${settingDay}__${cat}` as SlotKey
                 const d = slots[sk]
                 return (
-                  <div key={sk} className="border rounded-lg p-4">
-                    <p className="font-medium text-gray-700 mb-2">
+                  <div key={sk} className="cosmic-inset p-4">
+                    <p className="font-bold text-white mb-2">
                       {settingDay === 'today' ? '今日' : '明日'}{label}
                       <span className="ml-2 text-xs font-normal text-gray-400">{dateOf(settingDay)}</span>
                     </p>
@@ -424,15 +427,15 @@ export default function AdminPage() {
                         value={d.storeInput}
                         onChange={e => setSlot(sk, { storeInput: e.target.value })}
                         onKeyDown={e => e.key === 'Enter' && saveStoreName(settingDay, cat)}
-                        className="flex-1 border rounded-lg px-3 py-2 text-gray-800 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
+                        className="cosmic-field flex-1" />
                       <button onClick={() => saveStoreName(settingDay, cat)}
-                        className="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap">儲存店家</button>
+                        className="cosmic-btn-primary cosmic-btn-primary--sm text-sm whitespace-nowrap">儲存店家</button>
                     </div>
                     <input
                       ref={el => { fileRefs.current[sk] = el }}
                       type="file" accept="image/*" capture="environment"
                       onChange={e => handleMenuUpload(settingDay, cat, e)}
-                      className="block w-full text-sm text-gray-600 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:bg-gray-600 file:text-white file:font-medium hover:file:bg-gray-700 cursor-pointer" />
+                      className="cosmic-file block w-full cursor-pointer" />
                     {d.uploading && <p className="text-sm text-gray-400 mt-2">上傳中…</p>}
                     {d.menuImage && !d.uploading && (
                       <div className="mt-3">
@@ -451,14 +454,14 @@ export default function AdminPage() {
           </div>
 
           {/* 四個獨立類別的訂單 */}
-          <div className="bg-white rounded-xl border shadow-sm p-5">
+          <div className="glass-card p-5">
             <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
-              <h2 className="font-semibold text-gray-700">訂單統計</h2>
+              <h2 className="text-lg font-bold text-white">訂單統計</h2>
               <div className="flex items-center gap-2 flex-wrap">
                 {SLOTS.map(s => (
                   <button key={s.key} className={slotBtnClass(s.key)} onClick={() => setOrderSlot(s.key)}>
                     {s.label}
-                    <span className={`ml-1.5 text-xs ${orderSlot === s.key ? 'text-orange-100' : 'text-gray-400'}`}>
+                    <span className={`ml-1.5 text-xs cosmic-num ${orderSlot === s.key ? 'opacity-70' : 'text-gray-400'}`}>
                       {slotCount(s)}
                     </span>
                   </button>
@@ -473,14 +476,14 @@ export default function AdminPage() {
               </span>
               {slotOrders.length > 0 && (
                 <div className="flex items-center gap-2">
-                  <div className="flex rounded-lg overflow-hidden border text-sm">
+                  <div className="flex rounded-xl overflow-hidden border text-sm">
                     <button onClick={() => setOrderView('person')}
-                      className={`px-3 py-1.5 ${orderView === 'person' ? 'bg-orange-500 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}>依員工</button>
+                      className={`px-3 min-h-11 ${orderView === 'person' ? 'bg-[var(--accent)] text-[var(--on-accent)] font-semibold' : 'text-gray-600 hover:bg-gray-100'}`}>依員工</button>
                     <button onClick={() => setOrderView('item')}
-                      className={`px-3 py-1.5 ${orderView === 'item' ? 'bg-orange-500 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}>依品項</button>
+                      className={`px-3 min-h-11 ${orderView === 'item' ? 'bg-[var(--accent)] text-[var(--on-accent)] font-semibold' : 'text-gray-600 hover:bg-gray-100'}`}>依品項</button>
                   </div>
                   <button onClick={copyOrderList}
-                    className="text-sm bg-gray-100 hover:bg-gray-200 px-3 py-1.5 rounded-lg font-medium">複製叫餐清單</button>
+                    className="cosmic-btn-ghost text-sm">複製叫餐清單</button>
                 </div>
               )}
             </div>
@@ -488,7 +491,7 @@ export default function AdminPage() {
             {slotOrders.length === 0 ? (
               <p className="text-gray-400 text-sm italic">還沒有人點餐</p>
             ) : orderView === 'person' ? (
-              <table className="w-full text-sm">
+              <table className="w-full text-sm cosmic-table">
                 <thead>
                   <tr className="text-gray-500 border-b">
                     <th className="text-left py-1">員工</th>
@@ -504,16 +507,16 @@ export default function AdminPage() {
                       <td className="py-1.5 text-gray-700">{o.employees?.name}</td>
                       <td className="py-1.5 text-gray-700">{o.item_name}</td>
                       <td className="py-1.5 text-blue-500 text-xs">{o.note ?? ''}</td>
-                      <td className="py-1.5 text-right text-orange-500">${o.subtotal}</td>
+                      <td className="py-1.5 text-right text-white cosmic-num">${o.subtotal}</td>
                       <td className="py-1.5 text-right">
                         <button onClick={() => deleteOrder(o.id)}
-                          className="text-red-300 hover:text-red-500 text-lg leading-none">×</button>
+                          className="cosmic-del">×</button>
                       </td>
                     </tr>
                   ))}
                   <tr className="font-bold">
                     <td colSpan={3} className="pt-2 text-gray-700">合計</td>
-                    <td className="pt-2 text-right text-orange-600">${slotOrders.reduce((s, o) => s + o.subtotal, 0)}</td>
+                    <td className="pt-2 text-right cosmic-accent cosmic-num">${slotOrders.reduce((s, o) => s + o.subtotal, 0)}</td>
                     <td></td>
                   </tr>
                 </tbody>
@@ -529,7 +532,7 @@ export default function AdminPage() {
               }
               const items = Object.entries(itemMap).sort((a, b) => b[1].count - a[1].count)
               return (
-                <table className="w-full text-sm">
+                <table className="w-full text-sm cosmic-table">
                   <thead>
                     <tr className="text-gray-500 border-b">
                       <th className="text-left py-1">品項</th>
@@ -547,13 +550,13 @@ export default function AdminPage() {
                         </td>
                         <td className="py-1.5 text-gray-500 text-xs">{info.persons.join('、')}</td>
                         <td className="py-1.5 text-right font-semibold text-gray-700">× {info.count}</td>
-                        <td className="py-1.5 text-right text-orange-500">${info.total}</td>
+                        <td className="py-1.5 text-right text-white cosmic-num">${info.total}</td>
                       </tr>
                     ))}
                     <tr className="font-bold">
                       <td colSpan={2} className="pt-2 text-gray-700">合計</td>
                       <td className="pt-2 text-right text-gray-700">× {slotOrders.reduce((s, o) => s + (o.qty ?? 1), 0)}</td>
-                      <td className="pt-2 text-right text-orange-600">${slotOrders.reduce((s, o) => s + o.subtotal, 0)}</td>
+                      <td className="pt-2 text-right cosmic-accent cosmic-num">${slotOrders.reduce((s, o) => s + o.subtotal, 0)}</td>
                     </tr>
                   </tbody>
                 </table>
@@ -567,12 +570,12 @@ export default function AdminPage() {
       {tab === 'celebration' && (
         <div className="space-y-4">
           {/* 新增／編輯活動 */}
-          <div className="bg-white rounded-xl border shadow-sm p-5 space-y-3">
-            <h2 className="font-semibold text-gray-700">
+          <div className="glass-card p-5 space-y-3">
+            <h2 className="text-lg font-bold text-white">
               {evForm.id ? '✏️ 編輯活動' : '🎉 新增慶祝活動'}
             </h2>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block cosmic-label mb-1.5">
                 活動名稱 <span className="text-red-400">*</span>
                 <span className="ml-2 text-xs font-normal text-gray-400">這是什麼慶祝活動</span>
               </label>
@@ -580,40 +583,40 @@ export default function AdminPage() {
                 placeholder="例：10月壽星慶生會 / 尾牙加菜 / 專案慶功宴"
                 value={evForm.name}
                 onChange={e => setEvForm(f => ({ ...f, name: e.target.value }))}
-                className="w-full border rounded-lg px-3 py-2 text-gray-800 focus:outline-none focus:ring-2 focus:ring-rose-400" />
+                className="cosmic-field" />
             </div>
             <div className="grid sm:grid-cols-2 gap-3">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">開放預訂/修改（起）</label>
+                <label className="block cosmic-label mb-1.5">開放預訂/修改（起）</label>
                 <input type="date" value={evForm.start_date}
                   onChange={e => setEvForm(f => ({ ...f, start_date: e.target.value }))}
-                  className="w-full border rounded-lg px-3 py-2 text-gray-800 focus:outline-none focus:ring-2 focus:ring-rose-400" />
+                  className="cosmic-field" />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">截止日期（含當天）</label>
+                <label className="block cosmic-label mb-1.5">截止日期（含當天）</label>
                 <input type="date" value={evForm.end_date}
                   onChange={e => setEvForm(f => ({ ...f, end_date: e.target.value }))}
-                  className="w-full border rounded-lg px-3 py-2 text-gray-800 focus:outline-none focus:ring-2 focus:ring-rose-400" />
+                  className="cosmic-field" />
               </div>
             </div>
             <div className="grid sm:grid-cols-2 gap-3">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">店家名稱（可空白）</label>
+                <label className="block cosmic-label mb-1.5">店家名稱（可空白）</label>
                 <input placeholder="例：某某蛋糕店" value={evForm.restaurant_name}
                   onChange={e => setEvForm(f => ({ ...f, restaurant_name: e.target.value }))}
-                  className="w-full border rounded-lg px-3 py-2 text-gray-800 focus:outline-none focus:ring-2 focus:ring-rose-400" />
+                  className="cosmic-field" />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">補充說明（可空白）</label>
+                <label className="block cosmic-label mb-1.5">補充說明（可空白）</label>
                 <input placeholder="例：公司補助每人 200 元" value={evForm.note}
                   onChange={e => setEvForm(f => ({ ...f, note: e.target.value }))}
-                  className="w-full border rounded-lg px-3 py-2 text-gray-800 focus:outline-none focus:ring-2 focus:ring-rose-400" />
+                  className="cosmic-field" />
               </div>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">活動菜單圖片（可空白）</label>
+              <label className="block cosmic-label mb-1.5">活動菜單圖片（可空白）</label>
               <input ref={evFileRef} type="file" accept="image/*" onChange={handleEventMenuUpload}
-                className="block w-full text-sm text-gray-600 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:bg-gray-600 file:text-white file:font-medium hover:file:bg-gray-700 cursor-pointer" />
+                className="cosmic-file block w-full cursor-pointer" />
               {evForm.menu_image && (
                 <div className="mt-2 flex items-start gap-3">
                   <img src={evForm.menu_image} alt="菜單" className="max-h-32 rounded-lg border object-contain" />
@@ -624,34 +627,34 @@ export default function AdminPage() {
             </div>
             <div className="flex gap-2 pt-1">
               <button onClick={saveEvent} disabled={evSaving}
-                className="bg-rose-500 hover:bg-rose-600 text-white px-5 py-2 rounded-lg font-medium disabled:opacity-50">
+                className="cosmic-btn-primary cosmic-btn-primary--sm">
                 {evSaving ? '儲存中…' : evForm.id ? '儲存修改' : '建立活動'}
               </button>
               {evForm.id && (
                 <button onClick={() => { setEvForm(emptyEventForm()); if (evFileRef.current) evFileRef.current.value = '' }}
-                  className="bg-gray-100 hover:bg-gray-200 text-gray-600 px-4 py-2 rounded-lg text-sm font-medium">取消編輯</button>
+                  className="cosmic-btn-ghost text-sm">取消編輯</button>
               )}
             </div>
           </div>
 
           {/* 活動清單 */}
-          <div className="bg-white rounded-xl border shadow-sm p-5">
-            <h2 className="font-semibold text-gray-700 mb-3">活動清單（{events.length}）</h2>
+          <div className="glass-card p-5">
+            <h2 className="text-lg font-bold text-white mb-3">活動清單（{events.length}）</h2>
             {events.length === 0 ? (
               <p className="text-gray-400 text-sm italic">尚未建立任何活動</p>
             ) : (
               <div className="space-y-2">
                 {events.map(ev => {
                   const st = eventStatus(ev, dates.today)
-                  const cls = st === 'open' ? 'bg-rose-500 text-white'
-                    : st === 'upcoming' ? 'bg-amber-100 text-amber-700' : 'bg-gray-200 text-gray-600'
+                  const cls = st === 'open' ? 'cosmic-chip cosmic-chip--on'
+                    : st === 'upcoming' ? 'cosmic-chip cosmic-chip--wait' : 'cosmic-chip'
                   return (
                     <div key={ev.id}
-                      className={`border rounded-lg px-4 py-3 flex items-center justify-between gap-3 flex-wrap ${evSelected === ev.id ? 'border-rose-300 bg-rose-50' : ''}`}>
+                      className={`border rounded-lg px-4 py-3 flex items-center justify-between gap-3 flex-wrap ${evSelected === ev.id ? 'border-[rgba(var(--accent-rgb),0.55)] bg-[rgba(var(--accent-rgb),0.1)]' : ''}`}>
                       <button className="text-left flex-1 min-w-[180px]" onClick={() => setEvSelected(ev.id)}>
                         <div className="flex items-center gap-2 flex-wrap">
-                          <span className="font-semibold text-gray-800">{ev.name}</span>
-                          <span className={`text-xs px-2 py-0.5 rounded-full ${cls}`}>{EVENT_STATUS_LABEL[st]}</span>
+                          <span className="font-semibold text-white">{ev.name}</span>
+                          <span className={cls}>{EVENT_STATUS_LABEL[st]}</span>
                         </div>
                         <div className="text-xs text-gray-500 mt-0.5">
                           {ev.start_date} ～ {ev.end_date}
@@ -659,8 +662,8 @@ export default function AdminPage() {
                         </div>
                       </button>
                       <div className="flex items-center gap-3 text-sm">
-                        <button onClick={() => editEvent(ev)} className="text-gray-500 hover:text-gray-800">編輯</button>
-                        <button onClick={() => deleteEvent(ev)} className="text-red-300 hover:text-red-500">刪除</button>
+                        <button onClick={() => editEvent(ev)} className="text-gray-600 hover:text-gray-800 min-h-11 px-1">編輯</button>
+                        <button onClick={() => deleteEvent(ev)} className="text-red-300 hover:text-red-500 min-h-11 px-1">刪除</button>
                       </div>
                     </div>
                   )
@@ -671,20 +674,20 @@ export default function AdminPage() {
 
           {/* 該活動的訂單彙總 */}
           {evSelected && (
-            <div className="bg-white rounded-xl border shadow-sm p-5">
+            <div className="glass-card p-5">
               <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
-                <h2 className="font-semibold text-gray-700">
+                <h2 className="text-lg font-bold text-white">
                   「{events.find(e => e.id === evSelected)?.name}」訂單彙總
                 </h2>
                 {evOrders.length > 0 && (
                   <button onClick={copyEventList}
-                    className="text-sm bg-gray-100 hover:bg-gray-200 px-3 py-1.5 rounded-lg font-medium">複製叫餐清單</button>
+                    className="cosmic-btn-ghost text-sm">複製叫餐清單</button>
                 )}
               </div>
               {evOrders.length === 0 ? (
                 <p className="text-gray-400 text-sm italic">此活動還沒有人訂購</p>
               ) : (
-                <table className="w-full text-sm">
+                <table className="w-full text-sm cosmic-table">
                   <thead>
                     <tr className="text-gray-500 border-b">
                       <th className="text-left py-1">員工</th>
@@ -700,16 +703,16 @@ export default function AdminPage() {
                         <td className="py-1.5 text-gray-700">{o.employees?.name}</td>
                         <td className="py-1.5 text-gray-700">{o.item_name}</td>
                         <td className="py-1.5 text-blue-500 text-xs">{o.note ?? ''}</td>
-                        <td className="py-1.5 text-right text-rose-500">${o.subtotal}</td>
+                        <td className="py-1.5 text-right text-white cosmic-num">${o.subtotal}</td>
                         <td className="py-1.5 text-right">
                           <button onClick={() => deleteOrder(o.id, true)}
-                            className="text-red-300 hover:text-red-500 text-lg leading-none">×</button>
+                            className="cosmic-del">×</button>
                         </td>
                       </tr>
                     ))}
                     <tr className="font-bold">
                       <td colSpan={3} className="pt-2 text-gray-700">活動合計</td>
-                      <td className="pt-2 text-right text-rose-600">
+                      <td className="pt-2 text-right cosmic-accent cosmic-num">
                         ${(evOrders as any[]).reduce((s, o) => s + o.subtotal, 0)}
                       </td>
                       <td></td>
@@ -750,12 +753,12 @@ export default function AdminPage() {
         const years = [now.getFullYear() - 1, now.getFullYear()]
 
         const RankTable = ({ rows, head }: { rows: Agg[]; head: string }) => (
-          <div className="bg-white rounded-xl border shadow-sm p-5">
-            <h2 className="font-semibold text-gray-700 mb-3">{head}</h2>
+          <div className="glass-card p-5">
+            <h2 className="text-lg font-bold text-white mb-3">{head}</h2>
             {rows.length === 0 ? (
               <p className="text-gray-400 text-sm italic">本月尚無評分資料</p>
             ) : (
-              <table className="w-full text-sm">
+              <table className="w-full text-sm cosmic-table">
                 <thead>
                   <tr className="text-gray-500 border-b">
                     <th className="text-left py-1.5 w-10">排名</th>
@@ -792,11 +795,11 @@ export default function AdminPage() {
           <div className="space-y-4">
             <div className="flex items-center gap-2 flex-wrap">
               <select value={rYear} onChange={e => setRYear(Number(e.target.value))}
-                className="border rounded-lg px-3 py-1.5 text-gray-700 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400">
+                className="cosmic-field cosmic-field--sm cosmic-num w-auto!">
                 {years.map(y => <option key={y} value={y}>{y} 年</option>)}
               </select>
               <select value={rMonth} onChange={e => setRMonth(Number(e.target.value))}
-                className="border rounded-lg px-3 py-1.5 text-gray-700 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400">
+                className="cosmic-field cosmic-field--sm cosmic-num w-auto!">
                 {months.map(m => <option key={m} value={m}>{m} 月</option>)}
               </select>
               <span className="text-sm text-gray-400">共 {ratedOrders.length} 筆評分</span>
@@ -814,24 +817,24 @@ export default function AdminPage() {
       {/* ===== 員工管理 ===== */}
       {tab === 'employees' && (
         <div className="space-y-4">
-          <div className="bg-white rounded-xl border shadow-sm p-5">
-            <h2 className="font-semibold text-gray-700 mb-3">新增員工</h2>
+          <div className="glass-card p-5">
+            <h2 className="text-lg font-bold text-white mb-3">新增員工</h2>
             <div className="flex gap-3">
               <input placeholder="員工姓名" value={newEmpName} onChange={e => setNewEmpName(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && addEmployee()}
-                className="flex-1 border rounded-lg px-3 py-2 text-gray-800 focus:outline-none focus:ring-2 focus:ring-orange-400" />
+                className="cosmic-field flex-1" />
               <button onClick={addEmployee}
-                className="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-lg text-sm font-medium">新增</button>
+                className="cosmic-btn-primary cosmic-btn-primary--sm text-sm whitespace-nowrap">新增</button>
             </div>
           </div>
-          <div className="bg-white rounded-xl border shadow-sm p-5">
-            <h2 className="font-semibold text-gray-700 mb-3">員工名單（{employees.length} 人）</h2>
+          <div className="glass-card p-5">
+            <h2 className="text-lg font-bold text-white mb-3">員工名單（{employees.length} 人）</h2>
             <div className="grid sm:grid-cols-2 gap-2">
               {employees.map(e => (
                 <div key={e.id} className="flex justify-between items-center border rounded-lg px-3 py-2">
                   <span className="text-gray-800">{e.name}</span>
                   <button onClick={() => deleteEmployee(e.id, e.name)}
-                    className="text-red-300 hover:text-red-500 text-sm">刪除</button>
+                    className="text-red-300 hover:text-red-500 text-sm min-h-11 px-1">刪除</button>
                 </div>
               ))}
             </div>
